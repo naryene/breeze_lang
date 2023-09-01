@@ -5,7 +5,7 @@
 #include "value.h"
 
 void init_line_vec(LineVec *line_vec){
-  line_vec->count = 0;
+  line_vec->len = 0;
   line_vec->capacity = 0;
   line_vec->lines = NULL;
 }
@@ -16,27 +16,27 @@ void free_line_vec(LineVec *line_vec){
 }
 
 void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset){
-  if (line_vec->capacity < line_vec->count + 1){
+  if (line_vec->capacity < line_vec->len + 1){
     uint32_t old_capacity = line_vec->capacity;
     line_vec->capacity = GROW_CAPACITY(old_capacity);
     line_vec->lines = GROW_ARRAY(Line, line_vec->lines, old_capacity, line_vec->capacity);
   }
 
 
-  if (line_vec->count > 0 &&
-    line == line_vec->lines[line_vec->count - 1][0]){
-    line_vec->lines[line_vec->count - 1 ][1] = offset;
+  if (line_vec->len > 0 &&
+    line == line_vec->lines[line_vec->len - 1][0]){
+    line_vec->lines[line_vec->len - 1 ][1] = offset;
   } else {
-    line_vec->lines[line_vec->count][0] = line;
-    line_vec->lines[line_vec->count][1] = offset;
-    line_vec->count +=1;
+    line_vec->lines[line_vec->len][0] = line;
+    line_vec->lines[line_vec->len][1] = offset;
+    line_vec->len +=1;
   }
 
 }
 
 uint32_t get_line(LineVec line_vec, uint32_t offset) {
   int32_t start = 0;
-  int32_t end = line_vec.count;
+  int32_t end = line_vec.len;
   while (true) {
     int32_t mid = (start + end)/2;
 
@@ -52,7 +52,7 @@ uint32_t get_line(LineVec line_vec, uint32_t offset) {
 }
 
 void init_chunk(Chunk *chunk) {
-  chunk->count = 0;
+  chunk->len = 0;
   chunk->capacity = 0;
   chunk->code = 0;
   init_line_vec(&chunk->lines);
@@ -67,17 +67,31 @@ void free_chunk(Chunk *chunk){
 }
 
 void write_chunk(Chunk *chunk, uint8_t byte, uint32_t line) {
-  if (chunk->capacity < chunk->count + 1){
+  if (chunk->capacity < chunk->len + 1){
     uint32_t old_capacity = chunk->capacity;
     chunk->capacity = GROW_CAPACITY(old_capacity);
     chunk->code = GROW_ARRAY(uint8_t, chunk->code, old_capacity, chunk->capacity);
   }
-  write_line_vec(&chunk->lines, line, chunk->count);
-  chunk->code[chunk->count] = byte;
-  chunk->count += 1;
+  write_line_vec(&chunk->lines, line, chunk->len);
+  chunk->code[chunk->len] = byte;
+  chunk->len += 1;
 }
 
-uint32_t add_constant(Chunk *chunk, Value value){
+void push_constant(Chunk *chunk, Value value, uint32_t line){
   write_value_vec(&chunk->constants, value);
-  return chunk->constants.count - 1;
+  uint32_t idx = chunk->constants.len - 1;
+
+  if (idx < 256) {
+    write_chunk(chunk, OpConstant, line);
+    write_chunk(chunk, (uint8_t) idx, line);
+    chunk->len += 2;
+    return ;
+  }
+
+  write_chunk(chunk,OpConstantLong, line);
+  write_chunk(chunk, (uint8_t) idx, line);
+  write_chunk(chunk, (uint8_t) (idx >> 8), line);
+  write_chunk(chunk, (uint8_t) (idx >> 16), line);
+  chunk->len += 4;
 }
+

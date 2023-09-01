@@ -7,7 +7,7 @@ typedef double Value;
 
 typedef struct {
   uint32_t capacity;
-  uint32_t count;
+  uint32_t len;
   Value* values;
 } ValueVec;
 
