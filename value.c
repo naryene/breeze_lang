@@ -11,7 +11,7 @@ void init_value_vec(ValueVec* vec){
 
 void write_value_vec(ValueVec* vec, Value value){
   if (vec->capacity < vec->count+1) {
-    int32_t old_capacity = vec->capacity;
+    uint32_t old_capacity = vec->capacity;
     vec->capacity = GROW_CAPACITY(old_capacity);
     vec->values = GROW_ARRAY(Value, vec->values, old_capacity, vec->capacity);
   }
