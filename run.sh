@@ -2,5 +2,5 @@ if [[ -f ./target ]]; then
   rm ./target
 fi
 
-gcc *.c -o target
+gcc src/*.c -o target
 ./target

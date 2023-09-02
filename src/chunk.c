@@ -89,9 +89,9 @@ void push_constant(Chunk *chunk, Value value, uint32_t line){
   }
 
   write_chunk(chunk,OpConstantLong, line);
-  write_chunk(chunk, (uint8_t) idx, line);
-  write_chunk(chunk, (uint8_t) (idx >> 8), line);
-  write_chunk(chunk, (uint8_t) (idx >> 16), line);
+  write_chunk(chunk, (uint8_t) (idx & 0xff), line);
+  write_chunk(chunk, (uint8_t) ((idx >> 8) & 0xff), line);
+  write_chunk(chunk, (uint8_t) ((idx >> 16) & 0xff), line);
   chunk->len += 4;
 }
 
