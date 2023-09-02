@@ -1,21 +1,22 @@
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "chunk.h"
 #include "memory.h"
 #include "value.h"
 
-void init_line_vec(LineVec *line_vec){
+static void init_line_vec(LineVec *line_vec){
   line_vec->len = 0;
   line_vec->capacity = 0;
   line_vec->lines = NULL;
 }
 
-void free_line_vec(LineVec *line_vec){
+static void free_line_vec(LineVec *line_vec){
   FREE_ARRAY(uint32_t[2], line_vec->lines, line_vec->capacity);
   init_line_vec(line_vec);
 }
 
-void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset){
+static void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset){
   if (line_vec->capacity < line_vec->len + 1){
     uint32_t old_capacity = line_vec->capacity;
     line_vec->capacity = GROW_CAPACITY(old_capacity);
@@ -73,11 +74,12 @@ void write_chunk(Chunk *chunk, uint8_t byte, uint32_t line) {
     chunk->code = GROW_ARRAY(uint8_t, chunk->code, old_capacity, chunk->capacity);
   }
   write_line_vec(&chunk->lines, line, chunk->len);
+
   chunk->code[chunk->len] = byte;
   chunk->len += 1;
 }
 
-void push_constant(Chunk *chunk, Value value, uint32_t line){
+ void push_constant(Chunk *chunk, Value value, uint32_t line){
   write_value_vec(&chunk->constants, value);
   uint32_t idx = chunk->constants.len - 1;
 
