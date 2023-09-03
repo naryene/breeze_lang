@@ -63,21 +63,21 @@ static InterpretResult run() {
          */
     uint8_t inst;
     switch (inst = READ_BYTE()) {
-      case OpConstantLong: {
+      case OpConstLong: {
         Value constant = READ_CONSTANT_LONG();
         push_stack(constant);
         break;
       }
-      case OpConstant: {
+      case OpConst: {
         Value constant = READ_CONSTANT();
         push_stack(constant);
         break;
       }
-      case OpNegate: {
+      case OpNeg: {
         push_stack(- pop_stack());
         break;
       }
-      case OpReturn: {
+      case OpRet: {
         print_value(pop_stack());
         printf("\n");
         return InterpretOk;

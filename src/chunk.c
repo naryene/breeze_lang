@@ -83,11 +83,11 @@ void push_constant(Chunk *chunk, Value value, uint32_t line) {
   uint32_t idx = chunk->constants.len - 1;
 
   if (idx < 256) {
-    write_chunk(chunk, OpConstant, line);
+    write_chunk(chunk, OpConst, line);
     write_chunk(chunk, (uint8_t)idx, line);
     return;
   } 
-  write_chunk(chunk, OpConstantLong, line);
+  write_chunk(chunk, OpConstLong, line);
   write_chunk(chunk, (uint8_t)(idx & 0xff), line);
   write_chunk(chunk, (uint8_t)((idx >> 8) & 0xff), line);
   write_chunk(chunk, (uint8_t)((idx >> 16) & 0xff), line);

@@ -5,10 +5,14 @@
 #include "value.h"
 
 typedef enum {
-  OpReturn,
-  OpConstant,
-  OpConstantLong,
-  OpNegate,
+  OpRet,
+  OpConst,
+  OpConstLong,
+  OpNeg,
+  OpAdd,
+  OpSub,
+  OpMul,
+  OpDiv,
 } OpCode;
 
 /***

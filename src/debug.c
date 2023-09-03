@@ -43,16 +43,16 @@ uint32_t disassemble_inst(Chunk* chunk, uint32_t offset) {
 
   uint8_t inst = chunk->code[offset];
   switch (inst) {
-  case OpReturn:
-    return simple_inst("OpReturn", offset);
-  case OpConstant: {
-    return constant_inst("OpConstant", chunk, offset);
+  case OpRet:
+    return simple_inst("OpRet", offset);
+  case OpConst: {
+    return constant_inst("OpConst", chunk, offset);
   }
-  case OpConstantLong: {
-    return constant_long_inst("OpConstantLong", chunk, offset);
+  case OpConstLong: {
+    return constant_long_inst("OpConstLong", chunk, offset);
   }
-  case OpNegate: {
-    return simple_inst("OpNegate", offset);
+  case OpNeg: {
+    return simple_inst("OpNeg", offset);
   }
 
   default:

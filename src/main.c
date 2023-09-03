@@ -10,9 +10,8 @@ int32_t main() {
   Chunk chunk;
   init_chunk(&chunk);
   push_constant(&chunk, 1.2, 123);
-  write_chunk(&chunk, OpNegate, 123);
-
-  write_chunk(&chunk, OpReturn, 124);
+  write_chunk(&chunk, OpNeg, 123);
+  write_chunk(&chunk, OpRet, 124);
   // disassemble_chunk(&chunk, "chunk");
   interpret(&chunk);
   free_vm();
