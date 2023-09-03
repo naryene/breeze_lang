@@ -1,4 +1,6 @@
+#include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "chunk.h"
 #include "debug.h"
@@ -49,6 +51,10 @@ uint32_t disassemble_inst(Chunk* chunk, uint32_t offset) {
   case OpConstantLong: {
     return constant_long_inst("OpConstantLong", chunk, offset);
   }
+  case OpNegate: {
+    return simple_inst("OpNegate", offset);
+  }
+
   default:
     printf("Unknown opcode %d\n", inst);
     return offset + 1;
@@ -56,9 +62,14 @@ uint32_t disassemble_inst(Chunk* chunk, uint32_t offset) {
 }
 
 void disassemble_chunk(Chunk* chunk, const char *name) {
-  printf("== %s ==\n", name);
+  printf("== %s ==\n\n", name);
 
   for (uint32_t offset = 0; offset < chunk->len;) {
     offset = disassemble_inst(chunk, offset);
   }
+  printf("\n===");
+  for (uint8_t i=0; i<strlen(name); i+=1) {
+   printf("=");
+  }
+  printf("===\n");
 }
