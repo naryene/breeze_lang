@@ -30,19 +30,23 @@ static void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset) {
     line_vec->lines[line_vec->len][0] = line;
     line_vec->lines[line_vec->len][1] = offset;
     line_vec->len += 1;
+    
+    printf("inserted new\n");
   }
 }
 
 uint32_t get_line(LineVec line_vec, uint32_t offset) {
   int32_t start = 0;
-  int32_t end = line_vec.len;
+  int32_t end = line_vec.len - 1;
   while (true) {
     int32_t mid = (start + end) / 2;
 
+
     if (start > end) {
+      // printf("\nline: %u\n", line_vec.lines[mid][1]);
       return line_vec.lines[mid][0];
     }
-    if (offset > line_vec.lines[mid][1]) {
+    if (offset >= line_vec.lines[mid][1]) {
       start = mid + 1;
     } else {
       end = mid - 1;
