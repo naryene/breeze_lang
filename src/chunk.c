@@ -41,16 +41,23 @@ uint32_t get_line(LineVec line_vec, uint32_t offset) {
   while (true) {
     int32_t mid = (start + end) / 2;
 
+    // printf("\nmid midmd %d  offset: %u\n", mid, offset);
 
-    if (start > end) {
+
+    if (start >= end) {
       // printf("\nline: %u\n", line_vec.lines[mid][1]);
       return line_vec.lines[mid][0];
     }
-    if (offset >= line_vec.lines[mid][1]) {
+
+    if (offset > line_vec.lines[mid][1]) {
       start = mid + 1;
-    } else {
+      continue;
+    } 
+    if (offset < line_vec.lines[mid][1]){
       end = mid - 1;
+      continue;
     }
+    return line_vec.lines[mid][0];
   }
 }
 

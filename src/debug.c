@@ -44,22 +44,33 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
 
   uint8_t inst = chunk->code[offset];
   switch (inst) {
-  case OpRet:
-    return simple_inst("OpRet", offset);
-  case OpConst: {
-    return constant_inst("OpConst", chunk, offset);
-  }
-  case OpConstLong: {
-    return constant_long_inst("OpConstLong", chunk, offset);
-  }
-  case OpNeg: {
-    return simple_inst("OpNeg", offset);
-  }
-
-  default:
-    printf("Unknown opcode %d\n", inst);
-    return offset + 1;
-  }
+    case OpRet:
+      return simple_inst("OpRet", offset);
+    case OpConst: {
+      return constant_inst("OpConst", chunk, offset);
+    }
+    case OpConstLong: {
+      return constant_long_inst("OpConstLong", chunk, offset);
+    }
+    case OpNeg: {
+      return simple_inst("OpNeg", offset);
+    }
+    case OpAdd: {
+      return simple_inst("OpAdd", offset);
+    }
+    case OpSub: {
+      return simple_inst("OpSub", offset);
+    }
+    case OpMul: {
+      return simple_inst("OpMul", offset);
+    }
+    case OpDiv: {
+      return simple_inst("OpDiv", offset);
+    }
+    default:
+      printf("Unknown opcode %d\n", inst);
+      return offset + 1;
+    }
 }
 
 void print_lines(const Chunk *chunk) {
