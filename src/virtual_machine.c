@@ -1,4 +1,5 @@
 #include "virtual_machine.h"
+#include "chunk.h"
 #include "debug.h"
 #include "value.h"
 #include "compiler.h"
@@ -110,6 +111,17 @@ static InterpretResult run() {
 }
 
 InterpretResult interpret(const char* source) {
-  compile(source);
+  Chunk chunk;
+  init_chunk(&chunk);
+  if (!compile(source, &chunk)) {
+    free_chunk(&chunk);
+    return InterpretCompileErr;
+  }
+  vm.chunk = &chunk;
+  vm.inst_ptr = vm.chunk->code;
+
+  InterpretResult result = run();
+
+  free_chunk(&chunk);
   return InterpretOk;
 }
