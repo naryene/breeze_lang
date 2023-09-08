@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <stdlib.h>
 
 #include "chunk.h"
@@ -30,8 +29,6 @@ static void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset) {
     line_vec->lines[line_vec->len][0] = line;
     line_vec->lines[line_vec->len][1] = offset;
     line_vec->len += 1;
-    
-    printf("inserted new\n");
   }
 }
 

@@ -1,6 +1,10 @@
 #include "virtual_machine.h"
 #include "chunk.h"
+
+#ifdef DEBUG_TRACE_EXECUTION
 #include "debug.h"
+#endif /* ifdef DEBUG_TRACE_EXECUTION */
+
 #include "value.h"
 #include "compiler.h"
 

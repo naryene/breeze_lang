@@ -41,7 +41,7 @@ typedef enum {
   TokenPrint,
   TokenReturn,
   TokenSuper,
-  TokenThis,
+  TokenSelf,
   TokenTrue,
   TokenLet,
   TokenWhile,

@@ -170,16 +170,17 @@ static TokenType identifier_type () {
     case 'o': return check_keyword(1, 1, "r", TokenOr);
     case 'p': return check_keyword(1, 4, "rint", TokenPrint);
     case 'r': return check_keyword(1, 5, "eturn", TokenReturn);
-    case 's': return check_keyword(1, 4, "uper", TokenSuper);
-    case 't': {
+    case 's': {
       if (scanner.current - scanner.start > 1) {
         switch (scanner.start[1]) {
-          case 'h': return check_keyword(2, 2, "is", TokenThis);
-          case 'r': return check_keyword(2, 2, "ue", TokenTrue);
+          case 'u': return check_keyword(2, 2, "per", TokenSuper);
+          case 'e': return check_keyword(2, 2, "lf", TokenSelf);
         }
       }
       break;
     }
+    case 't': return check_keyword(1, 3, "rue", TokenTrue);
+      
     case 'w': return check_keyword(1, 4, "hile", TokenWhile);
   }
   return TokenIdentifier;
