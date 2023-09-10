@@ -5,16 +5,30 @@
 #include "debug.h"
 #endif /* ifdef DEBUG_TRACE_EXECUTION */
 
-#include "value.h"
 #include "compiler.h"
+#include "value.h"
 
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 VirtualMachine vm;
 
-void reset_stack() { vm.stack_ptr = vm.stack; }
+static void reset_stack() { vm.stack_ptr = vm.stack; }
+
+static void runtime_error(const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+
+  size_t inst = vm.inst_ptr - vm.chunk->code - 1;
+  uint32_t line = get_line(vm.chunk->lines, inst);
+  fprintf(stderr, "[line %d] in script\n", line);
+  reset_stack();
+}
 
 void init_vm() { reset_stack(); }
 
@@ -38,6 +52,10 @@ Value pop_stack() {
   return *vm.stack_ptr;
 }
 
+static Value peek(uint32_t distance) {
+  return vm.stack_ptr[(int32_t)(-1 - distance)];
+}
+
 static InterpretResult run() {
   /*** MACROS DEFINITION ***/
 
@@ -48,11 +66,15 @@ static InterpretResult run() {
     uint32_t idx = (READ_BYTE()) | (READ_BYTE() << 8) | (READ_BYTE() << 16);   \
     vm.chunk->constants.values[idx];                                           \
   })
-#define BINARY_OP(op)                                                          \
+#define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
-    Value right = pop_stack();                                                 \
-    Value left = pop_stack();                                                  \
-    push_stack(left op right);                                                 \
+    if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {                          \
+      runtime_error("Operands must be numbers.");                              \
+      return InterpretRuntimeErr;                                              \
+    }                                                                          \
+    double right = AS_NUMBER(pop_stack());                                     \
+    double left = AS_NUMBER(pop_stack());                                      \
+    push_stack(value_type(left op right));                                     \
   } while (false)
 
   /*** MACROS DEFINITION ***/
@@ -82,23 +104,27 @@ static InterpretResult run() {
       break;
     }
     case OpAdd: {
-      BINARY_OP(+);
+      BINARY_OP(NUMBER_VAL, +);
       break;
     }
     case OpSub: {
-      BINARY_OP(-);
+      BINARY_OP(NUMBER_VAL, -);
       break;
     }
     case OpMul: {
-      BINARY_OP(*);
+      BINARY_OP(NUMBER_VAL, *);
       break;
     }
     case OpDiv: {
-      BINARY_OP(/);
+      BINARY_OP(NUMBER_VAL, /);
       break;
     }
     case OpNeg: {
-      push_stack(-pop_stack());
+      if (!IS_NUMBER(peek(0))) {
+        runtime_error("Operand must be a number.");
+        return InterpretRuntimeErr;
+      }
+      push_stack(NUMBER_VAL(-AS_NUMBER(pop_stack())));
       break;
     }
     case OpRet: {
@@ -114,7 +140,7 @@ static InterpretResult run() {
 #undef BINARY_OP
 }
 
-InterpretResult interpret(const char* source) {
+InterpretResult interpret(const char *source) {
   Chunk chunk;
   init_chunk(&chunk);
   if (!compile(source, &chunk)) {

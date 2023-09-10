@@ -5,6 +5,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "scanner.h"
+#include "value.h"
 
 #ifdef DEBUG_PRINT_CODE 
 #include "debug.h"
@@ -106,8 +107,8 @@ static void emit_return() {
   emit_byte(OpRet);
 }
 
-static void emit_constant(const double value) {
-  push_constant(current_chunk(), (Value) value, parser.previous.line);
+static void emit_constant(const Value value) {
+  push_constant(current_chunk(), value, parser.previous.line);
 }
 
 static void end_compiler(){
@@ -205,7 +206,7 @@ static void grouping() {
 
 static void number() {
   double value = strtod(parser.previous.start, NULL);
-  emit_constant(value);
+  emit_constant(NUMBER_VAL(value));
 }
 
 static void unary() {
