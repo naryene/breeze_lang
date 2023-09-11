@@ -26,5 +26,30 @@ void free_value_vec(ValueVec* vec) {
 }
 
 void print_value(Value value) {
-  printf("%g", AS_NUMBER(value));
+  switch (value.type) {
+    case ValBool: {
+      printf(AS_BOOL(value) ? "true" : "false");
+      break;
+    }
+    case ValNull: {
+      printf("null");
+      break;
+    }
+    case ValNumber: {
+      printf("%g", AS_NUMBER(value));
+      break;
+    }
+  }
+}
+
+bool values_equal(Value left, Value right) {
+  if (left.type != right.type) {
+    return false;
+  }
+  switch (left.type) {
+    case ValBool: return AS_BOOL(left) == AS_BOOL(right);
+    case ValNull: return true;
+    case ValNumber: return AS_NUMBER(left)== AS_NUMBER(right);
+    default: return false;
+  }
 }

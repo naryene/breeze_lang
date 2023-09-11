@@ -34,6 +34,7 @@ typedef struct {
   Value *values;
 } ValueVec;
 
+bool values_equal(Value left, Value right);
 void init_value_vec(ValueVec *vec);
 void write_value_vec(ValueVec *vec, Value value);
 void free_value_vec(ValueVec *vec);

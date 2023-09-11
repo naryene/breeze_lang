@@ -65,7 +65,7 @@ static bool match(const char expected) {
     return false;
   }
   advance();
-  return false;
+  return true;
 }
 
 static void skip_white_space() {

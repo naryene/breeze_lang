@@ -128,6 +128,7 @@ static void grouping();
 static void number(); 
 static void unary();
 static void binary();
+static void literal();
 static ParseRule* get_rule(TokenType type);
 
 ParseRule rules[] = {
@@ -142,32 +143,32 @@ ParseRule rules[] = {
   [TokenSemiColon]    = {NULL,      NULL,   PrecNone},
   [TokenSlash]        = {NULL,      binary, PrecFactor},
   [TokenStar]         = {NULL,      binary, PrecFactor},
-  [TokenBang]         = {NULL,      NULL,   PrecNone},
-  [TokenBangEqual]    = {NULL,      NULL,   PrecNone},
+  [TokenBang]         = {unary,     NULL,   PrecNone},
+  [TokenBangEqual]    = {NULL,      binary, PrecEquality},
   [TokenEqual]        = {NULL,      NULL,   PrecNone},
-  [TokenEqualEqual]   = {NULL,      NULL,   PrecNone},
-  [TokenGreater]      = {NULL,      NULL,   PrecNone},
-  [TokenGreaterEqual] = {NULL,      NULL,   PrecNone},
-  [TokenLess]         = {NULL,      NULL,   PrecNone},
-  [TokenLessEqual]    = {NULL,      NULL,   PrecNone},
+  [TokenEqualEqual]   = {NULL,      binary, PrecEquality},
+  [TokenGreater]      = {NULL,      binary, PrecComparison},
+  [TokenGreaterEqual] = {NULL,      binary, PrecComparison},
+  [TokenLess]         = {NULL,      binary, PrecComparison},
+  [TokenLessEqual]    = {NULL,      binary, PrecComparison},
   [TokenIdentifier]   = {NULL,      NULL,   PrecNone},
   [TokenString]       = {NULL,      NULL,   PrecNone},
   [TokenNumber]       = {number,    NULL,   PrecNone},
   [TokenAnd]          = {NULL,      NULL,   PrecNone},
   [TokenClass]        = {NULL,      NULL,   PrecNone},
   [TokenElse]         = {NULL,      NULL,   PrecNone},
-  [TokenFalse]        = {NULL,      NULL,   PrecNone},
+  [TokenFalse]        = {literal,   NULL,   PrecNone},
   [TokenFor]          = {NULL,      NULL,   PrecNone},
   [TokenFn]           = {NULL,      NULL,   PrecNone},
   [TokenIf]           = {NULL,      NULL,   PrecNone},
   [TokenLet]          = {NULL,      NULL,   PrecNone},
-  [TokenNull]         = {NULL,      NULL,   PrecNone},
+  [TokenNull]         = {literal,   NULL,   PrecNone},
   [TokenOr]           = {NULL,      NULL,   PrecNone},
   [TokenPrint]        = {NULL,      NULL,   PrecNone},
   [TokenReturn]       = {NULL,      NULL,   PrecNone},
   [TokenSuper]        = {NULL,      NULL,   PrecNone},
   [TokenSelf]         = {NULL,      NULL,   PrecNone},
-  [TokenTrue]         = {NULL,      NULL,   PrecNone},
+  [TokenTrue]         = {literal,   NULL,   PrecNone},
   [TokenWhile]        = {NULL,      NULL,   PrecNone},
   [TokenError]        = {NULL,      NULL,   PrecNone},
   [TokenEof]          = {NULL,      NULL,   PrecNone},
@@ -219,6 +220,10 @@ static void unary() {
       emit_byte(OpNeg);
       break;
     }
+    case TokenBang: {
+      emit_byte(OpNot);
+      break;
+    }
     default: return;
   }
 }
@@ -229,6 +234,30 @@ static void binary() {
   parse_precedence((Precedence) (rule->precedence + 1));
 
   switch (operator_type) {
+    case TokenEqualEqual: {
+      emit_byte(OpEq);
+      break;
+    }
+    case TokenBangEqual: {
+      emit_word(OpEq, OpNot);
+      break;
+    }
+    case TokenLess: {
+      emit_byte(OpLt);
+      break;
+    }
+    case TokenLessEqual: {
+      emit_word(OpGt, OpNot);
+      break;
+    }
+    case TokenGreater: {
+      emit_byte(OpGt);
+      break;
+    }
+    case TokenGreaterEqual: {
+      emit_word(OpLt, OpNot);
+      break;
+    }
     case TokenPlus: {
       emit_byte(OpAdd);
       break;
@@ -249,6 +278,23 @@ static void binary() {
   }
 }
 
+static void literal() {
+  switch (parser.previous.type) {
+    case TokenNull: {
+      emit_byte(OpNull);
+      break;
+    }
+    case TokenTrue: {
+      emit_byte(OpTrue);
+      break;
+    }
+    case TokenFalse: {
+      emit_byte(OpFalse);
+      break;
+    }   
+    default: return;
+  }
+}
 
 
 

@@ -46,36 +46,44 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   switch (inst) {
     case OpRet:
       return simple_inst("OpRet", offset);
-    case OpConst: {
+    case OpConst:
       return constant_inst("OpConst", chunk, offset);
-    }
-    case OpConstLong: {
+    case OpConstLong:
       return constant_long_inst("OpConstLong", chunk, offset);
-    }
-    case OpNeg: {
+    case OpNull:
+      return simple_inst("OpNull", offset);
+    case OpTrue:
+      return simple_inst("OpTrue", offset);
+    case OpFalse:
+      return simple_inst("OpFalse", offset);
+    case OpNot: 
+      return simple_inst("OpNot", offset);
+    case OpNeg:
       return simple_inst("OpNeg", offset);
-    }
-    case OpAdd: {
+    case OpEq:
+      return simple_inst("OpEq", offset);
+    case OpGt:
+      return simple_inst("OpGt", offset);
+    case OpLt:
+      return simple_inst("OpLt", offset);
+    case OpAdd:
       return simple_inst("OpAdd", offset);
-    }
-    case OpSub: {
+    case OpSub:
       return simple_inst("OpSub", offset);
-    }
-    case OpMul: {
+    case OpMul:
       return simple_inst("OpMul", offset);
-    }
-    case OpDiv: {
+    case OpDiv:
       return simple_inst("OpDiv", offset);
-    }
-    default:
+    default: {
       printf("Unknown opcode %d\n", inst);
       return offset + 1;
     }
+  }
 }
 
 void print_lines(const Chunk *chunk) {
   printf("-----------------------------\n");
-  for (size_t i = 0; i< chunk->lines.len; i+=1) {
+  for (size_t i = 0; i < chunk->lines.len; i += 1) {
     printf("[ %u %u ]\n", chunk->lines.lines[i][0], chunk->lines.lines[i][1]);
   }
   printf("-----------------------------\n");
