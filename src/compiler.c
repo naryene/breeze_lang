@@ -4,6 +4,7 @@
 #include "chunk.h"
 #include "common.h"
 #include "compiler.h"
+#include "object.h"
 #include "scanner.h"
 #include "value.h"
 
@@ -33,6 +34,7 @@ typedef enum {
   PrecPrimary 
 } Precedence;
 
+/// function pointer
 typedef void (* ParseFn)();
 
 typedef struct {
@@ -129,6 +131,7 @@ static void number();
 static void unary();
 static void binary();
 static void literal();
+static void string();
 static ParseRule* get_rule(TokenType type);
 
 ParseRule rules[] = {
@@ -152,7 +155,7 @@ ParseRule rules[] = {
   [TokenLess]         = {NULL,      binary, PrecComparison},
   [TokenLessEqual]    = {NULL,      binary, PrecComparison},
   [TokenIdentifier]   = {NULL,      NULL,   PrecNone},
-  [TokenString]       = {NULL,      NULL,   PrecNone},
+  [TokenString]       = {string,    NULL,   PrecNone},
   [TokenNumber]       = {number,    NULL,   PrecNone},
   [TokenAnd]          = {NULL,      NULL,   PrecNone},
   [TokenClass]        = {NULL,      NULL,   PrecNone},
@@ -208,6 +211,11 @@ static void grouping() {
 static void number() {
   double value = strtod(parser.previous.start, NULL);
   emit_constant(NUMBER_VAL(value));
+}
+
+static void string() {
+  emit_constant(OBJ_VAL(copy_string(parser.previous.start+1,
+                                    parser.previous.len-2)));
 }
 
 static void unary() {
