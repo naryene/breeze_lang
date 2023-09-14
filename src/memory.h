@@ -2,6 +2,7 @@
 #define breeze_memory_h
 
 #include "common.h"
+#include "object.h"
 
 #define ALLOCATE(type, new_capacity) \
   (type*)reallocate(NULL, 0, sizeof(type)*new_capacity)
@@ -16,8 +17,9 @@
 #define FREE_ARRAY(type, ptr, old_capacity) \
     reallocate(ptr, sizeof(type) * (old_capacity), 0)
 
-
-
+#define FREE(type, pointer) reallocate(pointer, sizeof(type), 0)
 
 void* reallocate(void* ptr, size_t old_capacity, size_t new_capacity);
+void free_objects();
+
 #endif // !breeze_memory_h

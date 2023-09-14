@@ -7,10 +7,11 @@
 #define STACK_MAX 256
 
 typedef struct {
-  Chunk* chunk;
-  uint8_t* inst_ptr;
+  Chunk *chunk;
+  uint8_t *inst_ptr;
   Value stack[STACK_MAX];
-  Value* stack_ptr;
+  Value *stack_ptr;
+  Obj *objects;
 } VirtualMachine;
 
 typedef enum {
@@ -19,9 +20,11 @@ typedef enum {
   InterpretRuntimeErr,
 } InterpretResult;
 
+extern VirtualMachine vm;
+
 void init_vm();
 void free_vm();
-InterpretResult interpret(const char* source);
+InterpretResult interpret(const char *source);
 void push_stack(Value value);
 Value pop_stack();
 

@@ -1,5 +1,8 @@
 #include "virtual_machine.h"
 #include "chunk.h"
+#include "memory.h"
+#include "object.h"
+#include <string.h>
 
 #ifdef DEBUG_TRACE_EXECUTION
 #include "debug.h"
@@ -13,7 +16,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-VirtualMachine vm;
 
 static void reset_stack() { vm.stack_ptr = vm.stack; }
 
@@ -30,11 +32,13 @@ static void runtime_error(const char *format, ...) {
   reset_stack();
 }
 
-void init_vm() { reset_stack(); }
+void init_vm() {
+  reset_stack();
+  vm.objects = NULL;
+}
 
 void free_vm() {
-  vm.chunk = NULL;
-  vm.inst_ptr = NULL;
+  free_objects();
 }
 
 void push_stack(Value value) {
@@ -56,18 +60,33 @@ static Value peek(uint32_t distance) {
   return vm.stack_ptr[(int32_t)(-1 - distance)];
 }
 
+static void concat() {
+  ObjString *right = AS_STRING(pop_stack());
+  ObjString *left = AS_STRING(pop_stack());
 
+  uint32_t len = left->len + right->len;
+  char *chars = ALLOCATE(char, len + 1);
+  memcpy(chars, left->chars, left->len);
+  memcpy(chars + left->len, right->chars, right->len);
+  chars[len] = '\0';
+
+  ObjString *result = take_string(chars, len);
+  push_stack(OBJ_VAL(result));
+}
 
 static InterpretResult run() {
   /*** MACROS DEFINITION ***/
 
 #define READ_BYTE() (vm.inst_ptr += 1, *(vm.inst_ptr - 1))
+
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+
 #define READ_CONSTANT_LONG()                                                   \
   ({                                                                           \
     uint32_t idx = (READ_BYTE()) | (READ_BYTE() << 8) | (READ_BYTE() << 16);   \
     vm.chunk->constants.values[idx];                                           \
   })
+
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
     if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {                          \
@@ -95,79 +114,88 @@ static InterpretResult run() {
         */
     uint8_t inst;
     switch (inst = READ_BYTE()) {
-      case OpConst: {
-        Value constant = READ_CONSTANT();
-        push_stack(constant);
-        break;
+    case OpConst: {
+      Value constant = READ_CONSTANT();
+      push_stack(constant);
+      break;
+    }
+    case OpConstLong: {
+      Value constant = READ_CONSTANT_LONG();
+      push_stack(constant);
+      break;
+    }
+    case OpNull: {
+      push_stack(NULL_VAL);
+      break;
+    }
+    case OpTrue: {
+      push_stack(BOOL_VAL(true));
+      break;
+    }
+    case OpFalse: {
+      push_stack(BOOL_VAL(false));
+      break;
+    }
+    case OpEq: {
+      Value right = pop_stack();
+      Value left = pop_stack();
+      push_stack(BOOL_VAL(values_equal(left, right)));
+      break;
+    }
+    case OpLt: {
+      BINARY_OP(BOOL_VAL, <);
+      break;
+    }
+    case OpGt: {
+      BINARY_OP(BOOL_VAL, >);
+      break;
+    }
+    case OpAdd: {
+      if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+        concat();
+      } else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
+        double right = AS_NUMBER(pop_stack());
+        double left = AS_NUMBER(pop_stack());
+        push_stack(NUMBER_VAL(left + right));
+      } else {
+        runtime_error("Operands must be two numbers or two strings.");
+        return InterpretRuntimeErr;
       }
-      case OpConstLong: {
-        Value constant = READ_CONSTANT_LONG();
-        push_stack(constant);
-        break;
+      break;
+    }
+    case OpSub: {
+      BINARY_OP(NUMBER_VAL, -);
+      break;
+    }
+    case OpMul: {
+      BINARY_OP(NUMBER_VAL, *);
+      break;
+    }
+    case OpDiv: {
+      BINARY_OP(NUMBER_VAL, /);
+      break;
+    }
+    case OpNeg: {
+      if (!IS_NUMBER(peek(0))) {
+        runtime_error("Operand must be a number.");
+        return InterpretRuntimeErr;
       }
-      case OpNull: {
-        push_stack(NULL_VAL);
-        break;
+      push_stack(NUMBER_VAL(-AS_NUMBER(pop_stack())));
+      break;
+    }
+    case OpNot: {
+      if (!IS_BOOL(peek(0))) {
+        runtime_error("Operand must be a boolean.");
+        return InterpretRuntimeErr;
       }
-      case OpTrue: {
-        push_stack(BOOL_VAL(true));
-        break;
-      }
-      case OpFalse: {
-        push_stack(BOOL_VAL(false));
-        break;
-      }
-      case OpEq: {
-        Value right = pop_stack();
-        Value left = pop_stack();
-        push_stack(BOOL_VAL(values_equal(left, right)));
-        break;
-      }
-      case OpLt: {
-        BINARY_OP(BOOL_VAL, <);
-        break;
-      }
-      case OpGt: {
-        BINARY_OP(BOOL_VAL, >);
-        break;
-      }
-      case OpAdd: {
-        BINARY_OP(NUMBER_VAL, +);
-        break;
-      }
-      case OpSub: {
-        BINARY_OP(NUMBER_VAL, -);
-        break;
-      }
-      case OpMul: {
-        BINARY_OP(NUMBER_VAL, *);
-        break;
-      }
-      case OpDiv: {
-        BINARY_OP(NUMBER_VAL, /);
-        break;
-      }
-      case OpNeg: {
-        if (!IS_NUMBER(peek(0))) {
-          runtime_error("Operand must be a number.");
-          return InterpretRuntimeErr;
-        }
-        push_stack(NUMBER_VAL(-AS_NUMBER(pop_stack())));
-        break;
-      }
-      case OpNot: {
-        if (!IS_BOOL(peek(0))) {
-          runtime_error("Operand must be a boolean.");
-          return InterpretRuntimeErr;
-        }
-        push_stack(BOOL_VAL(!AS_BOOL(pop_stack())));
-        break;
-      }
-      case OpRet: {
-        print_value(pop_stack());
-        printf("\n");
-        return InterpretOk;
-      }
+      push_stack(BOOL_VAL(!AS_BOOL(pop_stack())));
+      break;
+    }
+    case OpRet: {
+      print_value(pop_stack());
+      printf("\n");
+      return InterpretOk;
+    }
     }
   }
 #undef READ_BYTE

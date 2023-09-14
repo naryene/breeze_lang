@@ -1,7 +1,9 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "memory.h"
 #include "value.h"
+#include "object.h"
 
 void init_value_vec(ValueVec* vec){
   vec->values = NULL;
@@ -25,6 +27,7 @@ void free_value_vec(ValueVec* vec) {
   init_value_vec(vec);
 }
 
+
 void print_value(Value value) {
   switch (value.type) {
     case ValBool: {
@@ -39,6 +42,10 @@ void print_value(Value value) {
       printf("%g", AS_NUMBER(value));
       break;
     }
+    case ValObj: {
+      print_object(value);
+      break;
+    }
   }
 }
 
@@ -50,6 +57,12 @@ bool values_equal(Value left, Value right) {
     case ValBool: return AS_BOOL(left) == AS_BOOL(right);
     case ValNull: return true;
     case ValNumber: return AS_NUMBER(left)== AS_NUMBER(right);
+    case ValObj: {
+      ObjString* left_string = AS_STRING(left);
+      ObjString* right_string = AS_STRING(right);
+      return left_string->len == right_string->len &&
+            memcmp(left_string->chars, right_string->chars, left_string->len) == 0;
+    }
     default: return false;
   }
 }
