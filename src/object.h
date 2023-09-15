@@ -28,6 +28,7 @@ struct ObjString {
   Obj obj;
   uint32_t len;
   const char *chars;
+  uint32_t hash;
 };
 
 ObjString* take_string(char* chars, uint32_t len);

@@ -7,7 +7,7 @@
 #include "virtual_machine.h"
 
 
-Obj* allocate_object(uint32_t size, ObjType type) {
+static Obj* allocate_object(uint32_t size, ObjType type) {
   Obj* object = (Obj*) reallocate(NULL, 0, size);
   object->type = type;
   object->next = vm.objects;
@@ -15,21 +15,34 @@ Obj* allocate_object(uint32_t size, ObjType type) {
   return object;
 }
 
-ObjString* allocate_string(const char* chars, uint32_t len) {
+static ObjString* allocate_string(const char* chars, uint32_t len, uint32_t hash) {
   ObjString* string = ALLOCATE_OBJ(ObjString, ObjStringType);
   string->len = len;
   string->chars = chars;
+  string->hash = hash;
   return string;
 }
 
-ObjString* take_string(char* chars, uint32_t len) {
-  return allocate_string(chars, len);
+static uint32_t hash_string(const char *key, uint32_t len) {
+  uint32_t hash = 2166136261u;
+  for (uint32_t i = 0; i < len; i+=1) {
+    hash ^= (uint32_t) key[i];
+    hash *= 16777619;
+  }
+  return hash;
 }
+
+ObjString* take_string(char* chars, uint32_t len) {
+  uint32_t hash = hash_string(chars, len);
+  return allocate_string(chars, len, hash);
+}
+
 ObjString* copy_string(const char* chars, uint32_t len){
+  uint32_t hash = hash_string(chars, len);
   char* heap_chars = ALLOCATE(char, len+1);
   memcpy(heap_chars, chars, len);
   heap_chars[len] = '\0';
-  return allocate_string(heap_chars, len);
+  return allocate_string(heap_chars, len, hash);
 }
 
 void print_object(Value value) {
