@@ -20,9 +20,18 @@ void free_table(Table *table) {
 static Entry *find_entry(Entry *entries, uint32_t capacity,
                          const ObjString *key) {
   uint32_t idx = key->hash % capacity;
+  Entry *tombstone = NULL;
   while (true) {
     Entry *entry = &entries[idx];
-    if (entry->key == key || entry->key == NULL) {
+    if (entry->key == NULL) {
+      if (IS_NULL(entry->value)) {
+        return tombstone != NULL ? tombstone : entry;
+      } else {
+        if (tombstone == NULL) {
+          tombstone = entry;
+        }
+      }
+    } else if (entry->key == key) {
       return entry;
     }
 
@@ -30,21 +39,37 @@ static Entry *find_entry(Entry *entries, uint32_t capacity,
   }
 }
 
+bool table_get(const Table *table, const ObjString *key, Value *value) {
+  if (table->len == 0) {
+    return false;
+  }
+
+  Entry *entry = find_entry(table->entries, table->capacity, key);
+  if (entry->key == NULL) {
+    return false;
+  }
+
+  *value = entry->value;
+  return true;
+}
+
 static void adjust_capacity(Table *table, uint32_t capacity) {
   Entry *entries = ALLOCATE(Entry, capacity);
-  for (uint32_t i=0; i<capacity; i+=1) {
+  for (uint32_t i = 0; i < capacity; i += 1) {
     entries[i].key = NULL;
     entries[i].value = NULL_VAL;
   }
 
-  for (uint32_t i=0; i<table->capacity; i+=1) {
-    Entry* entry = &table->entries[i];
+  table->len = 0;
+  for (uint32_t i = 0; i < table->capacity; i += 1) {
+    Entry *entry = &table->entries[i];
     if (entry->key == NULL) {
       continue;
     }
     Entry *dest = find_entry(entries, capacity, entry->key);
     dest->key = entry->key;
     dest->value = entry->value;
+    table->len += 1;
   }
 
   FREE_ARRAY(Entry, table->entries, table->capacity);
@@ -60,16 +85,33 @@ bool table_insert(Table *table, const ObjString *key, Value value) {
   Entry *entry = find_entry(table->entries, table->capacity, key);
   bool is_new_key = entry->key == NULL;
   if (is_new_key) {
-    table->len += 1;
     entry->key = key;
+    if (IS_NULL(entry->value)) {
+      table->len += 1;
+    }
   }
 
   entry->value = value;
   return is_new_key;
 }
 
-void table_copy(Table *src, Table *dest) {
-  for (uint32_t i=0; i<src->capacity; i+=1) {
+bool table_remove(Table *table, const ObjString *key) {
+  if (table->len == 0) {
+    return false;
+  }
+
+  Entry *entry = find_entry(table->entries, table->capacity, key);
+  if (entry->key == NULL) {
+    return false;
+  }
+
+  entry->key = NULL;
+  entry->value = BOOL_VAL(true);
+  return true;
+}
+
+void table_copy(const Table *src, Table *dest) {
+  for (uint32_t i = 0; i < src->capacity; i += 1) {
     Entry *entry = &src->entries[i];
     if (entry->key != NULL) {
       table_insert(dest, entry->key, entry->value);

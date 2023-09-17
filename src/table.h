@@ -17,7 +17,9 @@ typedef struct {
 
 void init_table(Table *table);
 void free_table(Table *table);
+bool table_get(const Table *table, const ObjString *key, Value *value);
 bool table_insert(Table *table, const ObjString *key, Value value);
-void table_copy(Table *src, Table *dest);
+bool table_remove(Table *table, const ObjString *key);
+void table_copy(const Table *src, Table *dest);
 
 #endif // !breeze_table_h
