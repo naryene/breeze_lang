@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+VirtualMachine vm;
+
 static void reset_stack() { vm.stack_ptr = vm.stack; }
 
 static void runtime_error(const char *format, ...) {

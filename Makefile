@@ -2,7 +2,7 @@ CC	=	gcc
 CFLAGS	=	-Wall	-g
 SRCS	=	src/main.c	src/chunk.c	src/compiler.c	src/debug.c	src/memory.c	src/object.c	src/scanner.c	src/table.c	src/value.c	src/virtual_machine.c
 OBJS	=	$(SRCS:.c=.o)
-TARGET	=	my_program
+TARGET	= target	
 
 all:	$(TARGET)
 
@@ -13,5 +13,5 @@ $(TARGET):	$(OBJS)
 				$(CC)	$(CFLAGS)	-c	-o	$@	$<
 
 clean:
-				rm	-f	$(OBJS)	$(TARGET)
+				rm	-f	$(OBJS)	
 
