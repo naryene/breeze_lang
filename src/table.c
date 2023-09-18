@@ -3,6 +3,7 @@
 #include "table.h"
 #include "memory.h"
 #include "value.h"
+#include <string.h>
 
 #define TABLE_MAX_LOAD 0.75
 
@@ -77,7 +78,7 @@ static void adjust_capacity(Table *table, uint32_t capacity) {
   table->capacity = capacity;
 }
 
-bool table_insert(Table *table, const ObjString *key, Value value) {
+bool table_insert(Table *table, ObjString *key, Value value) {
   if (table->len + 1 > table->capacity * TABLE_MAX_LOAD) {
     uint32_t capacity = GROW_CAPACITY(table->capacity);
     adjust_capacity(table, capacity);
@@ -116,5 +117,28 @@ void table_copy(const Table *src, Table *dest) {
     if (entry->key != NULL) {
       table_insert(dest, entry->key, entry->value);
     }
+  }
+}
+
+ObjString *table_find_string(Table *table, const char *chars, uint32_t len,
+                             uint32_t hash) {
+  if (table->len == 0) {
+    return NULL;
+  }
+
+  uint32_t idx = hash % table->capacity;
+  while (true) {
+    Entry *entry = &table->entries[idx];
+    if (entry->key == NULL) {
+
+      if (IS_NULL(entry->value)) {
+        return NULL;
+      }
+    } else if (entry->key->len == len && entry->key->hash == hash &&
+               memcmp(entry->key->chars, chars, len) == 0) {
+      return entry->key;
+    }
+
+    idx = (idx + 1) % table->capacity;
   }
 }

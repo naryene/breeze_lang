@@ -5,7 +5,7 @@
 #include "value.h"
 
 typedef struct {
-  const ObjString *key;
+  ObjString *key;
   Value value;
 } Entry;
 
@@ -18,8 +18,11 @@ typedef struct {
 void init_table(Table *table);
 void free_table(Table *table);
 bool table_get(const Table *table, const ObjString *key, Value *value);
-bool table_insert(Table *table, const ObjString *key, Value value);
+bool table_insert(Table *table, ObjString *key, Value value);
 bool table_remove(Table *table, const ObjString *key);
 void table_copy(const Table *src, Table *dest);
+ObjString *table_find_string(Table *table, const char *chars,
+                             uint32_t len, uint32_t hash);
+
 
 #endif // !breeze_table_h
