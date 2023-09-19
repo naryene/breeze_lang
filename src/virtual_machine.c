@@ -194,9 +194,16 @@ static InterpretResult run() {
       push_stack(BOOL_VAL(!AS_BOOL(pop_stack())));
       break;
     }
-    case OpRet: {
+    case OpPrint: {
       print_value(pop_stack());
       printf("\n");
+      break;
+    }
+      case OpPop: {
+        pop_stack();
+        break;
+      }
+    case OpRet: {
       return InterpretOk;
     }
     }

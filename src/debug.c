@@ -74,6 +74,10 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
       return simple_inst("OpMul", offset);
     case OpDiv:
       return simple_inst("OpDiv", offset);
+    case OpPrint:
+      return simple_inst("OpPrint", offset);
+    case OpPop:
+      return simple_inst("OpPop", offset);
     default: {
       printf("Unknown opcode %d\n", inst);
       return offset + 1;

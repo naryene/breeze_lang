@@ -20,6 +20,8 @@ typedef enum {
   OpSub,
   OpMul,
   OpDiv,
+  OpPrint,
+  OpPop,
 } OpCode;
 
 /***
@@ -31,13 +33,13 @@ typedef uint32_t Line[2];
 typedef struct {
   uint32_t len;
   uint32_t capacity;
-  Line* lines;
+  Line *lines;
 } LineVec;
 
 typedef struct {
   uint32_t len;
   uint32_t capacity;
-  uint8_t* code;
+  uint8_t *code;
   LineVec lines;
   ValueVec constants;
 
@@ -45,9 +47,9 @@ typedef struct {
 
 uint32_t get_line(LineVec lines, uint32_t offset);
 
-void init_chunk(Chunk* chunk);
-void free_chunk(Chunk* chunk);
-void write_chunk(Chunk* chunk, uint8_t byte, uint32_t line);
-void push_constant(Chunk* chunk, Value value, uint32_t line);
+void init_chunk(Chunk *chunk);
+void free_chunk(Chunk *chunk);
+void write_chunk(Chunk *chunk, uint8_t byte, uint32_t line);
+void push_constant(Chunk *chunk, Value value, uint32_t line);
 
 #endif // !breeze_chunk_h

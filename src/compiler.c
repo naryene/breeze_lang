@@ -8,34 +8,33 @@
 #include "scanner.h"
 #include "value.h"
 
-#ifdef DEBUG_PRINT_CODE 
+#ifdef DEBUG_PRINT_CODE
 #include "debug.h"
 #endif
-
 
 typedef struct {
   Token current;
   Token previous;
   bool had_error;
-  bool panic_mod;
+  bool panic_mode;
 } Parser;
 
 typedef enum {
   PrecNone,
   PrecAssignment, // =
-  PrecOr, // or
-  PrecAnd, // and
-  PrecEquality, // == !=
+  PrecOr,         // or
+  PrecAnd,        // and
+  PrecEquality,   // == !=
   PrecComparison, // < > <= >=
-  PrecTerm, // + -
-  PrecFactor, // * /
-  PrecUnary, // ! -
-  PrecCall, // . (
-  PrecPrimary 
+  PrecTerm,       // + -
+  PrecFactor,     // * /
+  PrecUnary,      // ! -
+  PrecCall,       // . (
+  PrecPrimary
 } Precedence;
 
 /// function pointer
-typedef void (* ParseFn)();
+typedef void (*ParseFn)();
 
 typedef struct {
   ParseFn prefix;
@@ -46,15 +45,13 @@ typedef struct {
 Parser parser;
 Chunk *compiling_chunk;
 
-static Chunk* current_chunk(){
-  return compiling_chunk;
-}
+static Chunk *current_chunk() { return compiling_chunk; }
 
 static void error_at(const Token *token, const char *message) {
-  if (parser.panic_mod == true) {
+  if (parser.panic_mode == true) {
     return;
   }
-  parser.panic_mod = true;
+  parser.panic_mode = true;
   fprintf(stderr, "[line %d] Error", token->line);
 
   if (token->type == TokenEof) {
@@ -94,7 +91,15 @@ static void consume(TokenType type, const char *message) {
   error_at_current(message);
 }
 
-// TODO:
+static bool check(TokenType type) { return parser.current.type == type; }
+
+static bool match(TokenType type) {
+  if (!check(type)) {
+    return false;
+  }
+  advance();
+  return true;
+}
 
 static void emit_byte(uint8_t byte) {
   write_chunk(current_chunk(), byte, parser.previous.line);
@@ -105,81 +110,82 @@ static void emit_word(uint8_t byte1, uint8_t byte2) {
   emit_byte(byte2);
 }
 
-static void emit_return() {
-  emit_byte(OpRet);
-}
+static void emit_return() { emit_byte(OpRet); }
 
 static void emit_constant(const Value value) {
   push_constant(current_chunk(), value, parser.previous.line);
 }
 
-static void end_compiler(){
+static void end_compiler() {
   emit_return();
 
-  #ifdef DEBUG_PRINT_CODE
-    if (parser.had_error == false) {
+#ifdef DEBUG_PRINT_CODE
+  if (parser.had_error == false) {
     disassemble_chunk(current_chunk(), "code");
   }
-  #endif /* ifdef DEBUG_PRINT_CODE */ 
-  
+#endif /* ifdef DEBUG_PRINT_CODE */
 }
 
-static void parse_precedence(Precedence precedence); 
-static void expression(); 
+static void parse_precedence(Precedence precedence);
+static void expression();
+
 static void grouping();
-static void number(); 
+static void number();
 static void unary();
 static void binary();
 static void literal();
 static void string();
-static ParseRule* get_rule(TokenType type);
+
+static void declaration();
+static void statement();
+static void print_statement();
+
+static ParseRule *get_rule(TokenType type);
 
 ParseRule rules[] = {
-  [TokenLeftParen]    = {grouping,  NULL,   PrecNone},
-  [TokenRightParen]   = {NULL,      NULL,   PrecNone},
-  [TokenLeftBrace]    = {NULL,      NULL,   PrecNone},
-  [TokenRightBrace]   = {NULL,      NULL,   PrecNone},
-  [TokenComma]        = {NULL,      NULL,   PrecNone},
-  [TokenDot]          = {NULL,      NULL,   PrecNone},
-  [TokenMinus]        = {unary,     binary, PrecTerm},
-  [TokenPlus]         = {NULL,      binary, PrecTerm},
-  [TokenSemiColon]    = {NULL,      NULL,   PrecNone},
-  [TokenSlash]        = {NULL,      binary, PrecFactor},
-  [TokenStar]         = {NULL,      binary, PrecFactor},
-  [TokenBang]         = {unary,     NULL,   PrecNone},
-  [TokenBangEqual]    = {NULL,      binary, PrecEquality},
-  [TokenEqual]        = {NULL,      NULL,   PrecNone},
-  [TokenEqualEqual]   = {NULL,      binary, PrecEquality},
-  [TokenGreater]      = {NULL,      binary, PrecComparison},
-  [TokenGreaterEqual] = {NULL,      binary, PrecComparison},
-  [TokenLess]         = {NULL,      binary, PrecComparison},
-  [TokenLessEqual]    = {NULL,      binary, PrecComparison},
-  [TokenIdentifier]   = {NULL,      NULL,   PrecNone},
-  [TokenString]       = {string,    NULL,   PrecNone},
-  [TokenNumber]       = {number,    NULL,   PrecNone},
-  [TokenAnd]          = {NULL,      NULL,   PrecNone},
-  [TokenClass]        = {NULL,      NULL,   PrecNone},
-  [TokenElse]         = {NULL,      NULL,   PrecNone},
-  [TokenFalse]        = {literal,   NULL,   PrecNone},
-  [TokenFor]          = {NULL,      NULL,   PrecNone},
-  [TokenFn]           = {NULL,      NULL,   PrecNone},
-  [TokenIf]           = {NULL,      NULL,   PrecNone},
-  [TokenLet]          = {NULL,      NULL,   PrecNone},
-  [TokenNull]         = {literal,   NULL,   PrecNone},
-  [TokenOr]           = {NULL,      NULL,   PrecNone},
-  [TokenPrint]        = {NULL,      NULL,   PrecNone},
-  [TokenReturn]       = {NULL,      NULL,   PrecNone},
-  [TokenSuper]        = {NULL,      NULL,   PrecNone},
-  [TokenSelf]         = {NULL,      NULL,   PrecNone},
-  [TokenTrue]         = {literal,   NULL,   PrecNone},
-  [TokenWhile]        = {NULL,      NULL,   PrecNone},
-  [TokenError]        = {NULL,      NULL,   PrecNone},
-  [TokenEof]          = {NULL,      NULL,   PrecNone},
+    [TokenLeftParen] = {grouping, NULL, PrecNone},
+    [TokenRightParen] = {NULL, NULL, PrecNone},
+    [TokenLeftBrace] = {NULL, NULL, PrecNone},
+    [TokenRightBrace] = {NULL, NULL, PrecNone},
+    [TokenComma] = {NULL, NULL, PrecNone},
+    [TokenDot] = {NULL, NULL, PrecNone},
+    [TokenMinus] = {unary, binary, PrecTerm},
+    [TokenPlus] = {NULL, binary, PrecTerm},
+    [TokenSemiColon] = {NULL, NULL, PrecNone},
+    [TokenSlash] = {NULL, binary, PrecFactor},
+    [TokenStar] = {NULL, binary, PrecFactor},
+    [TokenBang] = {unary, NULL, PrecNone},
+    [TokenBangEqual] = {NULL, binary, PrecEquality},
+    [TokenEqual] = {NULL, NULL, PrecNone},
+    [TokenEqualEqual] = {NULL, binary, PrecEquality},
+    [TokenGreater] = {NULL, binary, PrecComparison},
+    [TokenGreaterEqual] = {NULL, binary, PrecComparison},
+    [TokenLess] = {NULL, binary, PrecComparison},
+    [TokenLessEqual] = {NULL, binary, PrecComparison},
+    [TokenIdentifier] = {NULL, NULL, PrecNone},
+    [TokenString] = {string, NULL, PrecNone},
+    [TokenNumber] = {number, NULL, PrecNone},
+    [TokenAnd] = {NULL, NULL, PrecNone},
+    [TokenClass] = {NULL, NULL, PrecNone},
+    [TokenElse] = {NULL, NULL, PrecNone},
+    [TokenFalse] = {literal, NULL, PrecNone},
+    [TokenFor] = {NULL, NULL, PrecNone},
+    [TokenFn] = {NULL, NULL, PrecNone},
+    [TokenIf] = {NULL, NULL, PrecNone},
+    [TokenLet] = {NULL, NULL, PrecNone},
+    [TokenNull] = {literal, NULL, PrecNone},
+    [TokenOr] = {NULL, NULL, PrecNone},
+    [TokenPrint] = {NULL, NULL, PrecNone},
+    [TokenReturn] = {NULL, NULL, PrecNone},
+    [TokenSuper] = {NULL, NULL, PrecNone},
+    [TokenSelf] = {NULL, NULL, PrecNone},
+    [TokenTrue] = {literal, NULL, PrecNone},
+    [TokenWhile] = {NULL, NULL, PrecNone},
+    [TokenError] = {NULL, NULL, PrecNone},
+    [TokenEof] = {NULL, NULL, PrecNone},
 };
 
-static ParseRule* get_rule(TokenType type) {
-  return &rules[type];
-}
+static ParseRule *get_rule(TokenType type) { return &rules[type]; }
 
 static void parse_precedence(Precedence precedence) {
   advance();
@@ -197,12 +203,6 @@ static void parse_precedence(Precedence precedence) {
   }
 }
 
-
-static void expression() {
-  parse_precedence(PrecAssignment);
-}
-
-
 static void grouping() {
   expression();
   consume(TokenRightParen, "Expect ')' after expression.");
@@ -214,8 +214,8 @@ static void number() {
 }
 
 static void string() {
-  emit_constant(OBJ_VAL(copy_string(parser.previous.start+1,
-                                    parser.previous.len-2)));
+  emit_constant(
+      OBJ_VAL(copy_string(parser.previous.start + 1, parser.previous.len - 2)));
 }
 
 static void unary() {
@@ -224,98 +224,155 @@ static void unary() {
   parse_precedence(PrecUnary);
 
   switch (operator_type) {
-    case TokenMinus: {
-      emit_byte(OpNeg);
-      break;
-    }
-    case TokenBang: {
-      emit_byte(OpNot);
-      break;
-    }
-    default: return;
+  case TokenMinus: {
+    emit_byte(OpNeg);
+    break;
+  }
+  case TokenBang: {
+    emit_byte(OpNot);
+    break;
+  }
+  default:
+    return;
   }
 }
 
 static void binary() {
   TokenType operator_type = parser.previous.type;
   ParseRule *rule = get_rule(operator_type);
-  parse_precedence((Precedence) (rule->precedence + 1));
+  parse_precedence((Precedence)(rule->precedence + 1));
 
   switch (operator_type) {
-    case TokenEqualEqual: {
-      emit_byte(OpEq);
-      break;
-    }
-    case TokenBangEqual: {
-      emit_word(OpEq, OpNot);
-      break;
-    }
-    case TokenLess: {
-      emit_byte(OpLt);
-      break;
-    }
-    case TokenLessEqual: {
-      emit_word(OpGt, OpNot);
-      break;
-    }
-    case TokenGreater: {
-      emit_byte(OpGt);
-      break;
-    }
-    case TokenGreaterEqual: {
-      emit_word(OpLt, OpNot);
-      break;
-    }
-    case TokenPlus: {
-      emit_byte(OpAdd);
-      break;
-    } 
-    case TokenMinus: {
-      emit_byte(OpSub);
-      break;
-    }
-    case TokenStar: {
-      emit_byte(OpMul);
-      break;
-    }
-    case TokenSlash: {
-      emit_byte(OpDiv);
-      break;
-    }
-    default: return;
+  case TokenEqualEqual: {
+    emit_byte(OpEq);
+    break;
+  }
+  case TokenBangEqual: {
+    emit_word(OpEq, OpNot);
+    break;
+  }
+  case TokenLess: {
+    emit_byte(OpLt);
+    break;
+  }
+  case TokenLessEqual: {
+    emit_word(OpGt, OpNot);
+    break;
+  }
+  case TokenGreater: {
+    emit_byte(OpGt);
+    break;
+  }
+  case TokenGreaterEqual: {
+    emit_word(OpLt, OpNot);
+    break;
+  }
+  case TokenPlus: {
+    emit_byte(OpAdd);
+    break;
+  }
+  case TokenMinus: {
+    emit_byte(OpSub);
+    break;
+  }
+  case TokenStar: {
+    emit_byte(OpMul);
+    break;
+  }
+  case TokenSlash: {
+    emit_byte(OpDiv);
+    break;
+  }
+  default:
+    return;
   }
 }
 
 static void literal() {
   switch (parser.previous.type) {
-    case TokenNull: {
-      emit_byte(OpNull);
-      break;
-    }
-    case TokenTrue: {
-      emit_byte(OpTrue);
-      break;
-    }
-    case TokenFalse: {
-      emit_byte(OpFalse);
-      break;
-    }   
-    default: return;
+  case TokenNull: {
+    emit_byte(OpNull);
+    break;
+  }
+  case TokenTrue: {
+    emit_byte(OpTrue);
+    break;
+  }
+  case TokenFalse: {
+    emit_byte(OpFalse);
+    break;
+  }
+  default:
+    return;
   }
 }
 
+static void expression() { parse_precedence(PrecAssignment); }
 
+static void synchronize() {
+  parser.panic_mode = false;
+
+  while (parser.current.type != TokenEof) {
+    if (parser.previous.type == TokenSemiColon) {
+      return;
+    }
+    switch (parser.current.type) {
+      case TokenClass:
+      case TokenFn:
+      case TokenLet:
+      case TokenFor:
+      case TokenIf:
+      case TokenWhile:
+      case TokenPrint:
+      case TokenReturn:
+        return;
+
+      default: 
+      ;
+    }
+    advance();
+  }
+}
+
+static void declaration() {
+  statement();
+
+  if (parser.panic_mode) {
+    synchronize();
+  }
+}
+
+static void print_statement() {
+  expression();
+  consume(TokenSemiColon, "Expect ';' after value.");
+  emit_byte(OpPrint);
+}
+
+static void expression_statement() {
+  expression();
+  consume(TokenSemiColon, "Expect ';' after value.");
+  emit_byte(OpPop);
+}
+
+static void statement() {
+  if (match(TokenPrint)) {
+    print_statement();
+  } else {
+    expression_statement();
+  }
+}
 
 bool compile(const char *source, Chunk *chunk) {
   init_scanner(source);
   compiling_chunk = chunk;
 
   parser.had_error = false;
-  parser.panic_mod = false;
+  parser.panic_mode = false;
 
   advance();
-  expression();
-  consume(TokenEof, "Expect end of expression.");
+  while (!match(TokenEof)) {
+    declaration();
+  }
   end_compiler();
   return !parser.had_error;
 }
