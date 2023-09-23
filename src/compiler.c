@@ -116,6 +116,11 @@ static uint32_t emit_constant(const Value value) {
   return push_constant(current_chunk(), value, parser.previous.line);
 }
 
+static void emit_name(const Token name) {
+  ObjString * string= copy_string(name.start, name.len);
+  emit_constant(OBJ_VAL(string));
+}
+
 static void end_compiler() {
   emit_return();
 
@@ -135,6 +140,7 @@ static void unary();
 static void binary();
 static void literal();
 static void string();
+static void variable();
 
 static void declaration();
 static void statement();
@@ -162,7 +168,7 @@ ParseRule rules[] = {
     [TokenGreaterEqual] = {NULL, binary, PrecComparison},
     [TokenLess] = {NULL, binary, PrecComparison},
     [TokenLessEqual] = {NULL, binary, PrecComparison},
-    [TokenIdentifier] = {NULL, NULL, PrecNone},
+    [TokenIdentifier] = {variable, NULL, PrecNone},
     [TokenString] = {string, NULL, PrecNone},
     [TokenNumber] = {number, NULL, PrecNone},
     [TokenAnd] = {NULL, NULL, PrecNone},
@@ -203,9 +209,9 @@ static void parse_precedence(Precedence precedence) {
   }
 }
 
-static void define_variable(const Token *name) {
+static void define_variable(const Token name) {
   emit_byte(OpDefineGlobal);
-  emit_constant(OBJ_VAL(copy_string(name->start, name->len)));
+  emit_name(name);
 }
 
 static void grouping() {
@@ -222,6 +228,12 @@ static void string() {
   emit_constant(
       OBJ_VAL(copy_string(parser.previous.start + 1, parser.previous.len - 2)));
 }
+
+static void name_variable(Token name) {
+  emit_byte(OpGetGlobal);
+  emit_name(name);
+}
+static void variable() { name_variable(parser.previous); }
 
 static void unary() {
   TokenType operator_type = parser.previous.type;
@@ -316,7 +328,8 @@ static void expression() { parse_precedence(PrecAssignment); }
 
 static void var_declaration() {
   consume(TokenIdentifier, "Expect variable name.");
-  const Token *identifier = &parser.previous;
+  const Token identifier = parser.previous;
+
 
   if (match(TokenEqual)) {
     expression();

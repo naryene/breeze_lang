@@ -37,7 +37,7 @@ static void runtime_error(const char *format, ...) {
 void init_vm() {
   reset_stack();
   vm.objects = NULL;
-  
+
   init_table(&vm.globals);
   init_table(&vm.strings);
 }
@@ -98,13 +98,13 @@ static InterpretResult run() {
 #define READ_STRING()                                                          \
   ({                                                                           \
     uint8_t constant_op = READ_BYTE();                                         \
-    Value constant;\
+    Value constant;                                                            \
     if (constant_op == OpConst) {                                              \
       constant = READ_CONSTANT();                                              \
     } else {                                                                   \
       constant = READ_CONSTANT_LONG();                                         \
     }                                                                          \
-    AS_STRING(constant);\
+    AS_STRING(constant);                                                       \
   })
 
 #define BINARY_OP(value_type, op)                                              \
@@ -154,6 +154,16 @@ static InterpretResult run() {
     }
     case OpFalse: {
       push_stack(BOOL_VAL(false));
+      break;
+    }
+    case OpGetGlobal: {
+      ObjString *name = READ_STRING();
+      Value value;
+      if (!table_get(&vm.globals, name, &value)) {
+        runtime_error("Undefined variable '%s'.", name->chars);
+        return InterpretRuntimeErr;
+      }
+      push_stack(value);
       break;
     }
     case OpDefineGlobal: {
