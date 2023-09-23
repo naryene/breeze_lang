@@ -112,8 +112,8 @@ static void emit_word(uint8_t byte1, uint8_t byte2) {
 
 static void emit_return() { emit_byte(OpRet); }
 
-static void emit_constant(const Value value) {
-  push_constant(current_chunk(), value, parser.previous.line);
+static uint32_t emit_constant(const Value value) {
+  return push_constant(current_chunk(), value, parser.previous.line);
 }
 
 static void end_compiler() {
@@ -201,6 +201,11 @@ static void parse_precedence(Precedence precedence) {
     ParseFn infix_rule = get_rule(parser.previous.type)->infix;
     infix_rule();
   }
+}
+
+static void define_variable(const Token *name) {
+  emit_byte(OpDefineGlobal);
+  emit_constant(OBJ_VAL(copy_string(name->start, name->len)));
 }
 
 static void grouping() {
@@ -309,6 +314,21 @@ static void literal() {
 
 static void expression() { parse_precedence(PrecAssignment); }
 
+static void var_declaration() {
+  consume(TokenIdentifier, "Expect variable name.");
+  const Token *identifier = &parser.previous;
+
+  if (match(TokenEqual)) {
+    expression();
+  } else {
+    emit_byte(OpNull);
+  }
+
+  consume(TokenSemiColon, "Expect ';' after variable declaration.");
+
+  define_variable(identifier);
+}
+
 static void synchronize() {
   parser.panic_mode = false;
 
@@ -317,25 +337,28 @@ static void synchronize() {
       return;
     }
     switch (parser.current.type) {
-      case TokenClass:
-      case TokenFn:
-      case TokenLet:
-      case TokenFor:
-      case TokenIf:
-      case TokenWhile:
-      case TokenPrint:
-      case TokenReturn:
-        return;
+    case TokenClass:
+    case TokenFn:
+    case TokenLet:
+    case TokenFor:
+    case TokenIf:
+    case TokenWhile:
+    case TokenPrint:
+    case TokenReturn:
+      return;
 
-      default: 
-      ;
+    default:;
     }
     advance();
   }
 }
 
 static void declaration() {
-  statement();
+  if (match(TokenLet)) {
+    var_declaration();
+  } else {
+    statement();
+  }
 
   if (parser.panic_mode) {
     synchronize();

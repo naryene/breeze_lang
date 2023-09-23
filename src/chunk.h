@@ -22,6 +22,7 @@ typedef enum {
   OpDiv,
   OpPrint,
   OpPop,
+  OpDefineGlobal,
 } OpCode;
 
 /***
@@ -50,6 +51,6 @@ uint32_t get_line(LineVec lines, uint32_t offset);
 void init_chunk(Chunk *chunk);
 void free_chunk(Chunk *chunk);
 void write_chunk(Chunk *chunk, uint8_t byte, uint32_t line);
-void push_constant(Chunk *chunk, Value value, uint32_t line);
+uint32_t push_constant(Chunk *chunk, Value value, uint32_t line);
 
 #endif // !breeze_chunk_h

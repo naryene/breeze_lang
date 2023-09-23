@@ -2,6 +2,7 @@
 #include "chunk.h"
 #include "memory.h"
 #include "object.h"
+#include "table.h"
 #include <string.h>
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -36,10 +37,13 @@ static void runtime_error(const char *format, ...) {
 void init_vm() {
   reset_stack();
   vm.objects = NULL;
+  
+  init_table(&vm.globals);
   init_table(&vm.strings);
 }
 
 void free_vm() {
+  free_table(&vm.globals);
   free_table(&vm.strings);
   free_objects();
 }
@@ -59,6 +63,7 @@ Value pop_stack() {
   return *vm.stack_ptr;
 }
 
+// Peeks at a `Value` in the VM stack.
 static Value peek(uint32_t distance) {
   return vm.stack_ptr[(int32_t)(-1 - distance)];
 }
@@ -88,6 +93,18 @@ static InterpretResult run() {
   ({                                                                           \
     uint32_t idx = (READ_BYTE()) | (READ_BYTE() << 8) | (READ_BYTE() << 16);   \
     vm.chunk->constants.values[idx];                                           \
+  })
+
+#define READ_STRING()                                                          \
+  ({                                                                           \
+    uint8_t constant_op = READ_BYTE();                                         \
+    Value constant;\
+    if (constant_op == OpConst) {                                              \
+      constant = READ_CONSTANT();                                              \
+    } else {                                                                   \
+      constant = READ_CONSTANT_LONG();                                         \
+    }                                                                          \
+    AS_STRING(constant);\
   })
 
 #define BINARY_OP(value_type, op)                                              \
@@ -137,6 +154,12 @@ static InterpretResult run() {
     }
     case OpFalse: {
       push_stack(BOOL_VAL(false));
+      break;
+    }
+    case OpDefineGlobal: {
+      ObjString *name = READ_STRING();
+      table_insert(&vm.globals, name, peek(0));
+      pop_stack();
       break;
     }
     case OpEq: {
@@ -199,10 +222,10 @@ static InterpretResult run() {
       printf("\n");
       break;
     }
-      case OpPop: {
-        pop_stack();
-        break;
-      }
+    case OpPop: {
+      pop_stack();
+      break;
+    }
     case OpRet: {
       return InterpretOk;
     }
@@ -211,6 +234,7 @@ static InterpretResult run() {
 #undef READ_BYTE
 #undef READ_CONSTANT
 #undef READ_CONSTANT_LONG
+#undef READ_STRING
 #undef BINARY_OP
 }
 

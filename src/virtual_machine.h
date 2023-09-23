@@ -12,6 +12,7 @@ typedef struct {
   uint8_t *inst_ptr;
   Value stack[STACK_MAX];
   Value *stack_ptr;
+  Table globals;
   Table strings;
   Obj *objects;
 } VirtualMachine;

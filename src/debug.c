@@ -44,44 +44,46 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
 
   uint8_t inst = chunk->code[offset];
   switch (inst) {
-    case OpRet:
-      return simple_inst("OpRet", offset);
-    case OpConst:
-      return constant_inst("OpConst", chunk, offset);
-    case OpConstLong:
-      return constant_long_inst("OpConstLong", chunk, offset);
-    case OpNull:
-      return simple_inst("OpNull", offset);
-    case OpTrue:
-      return simple_inst("OpTrue", offset);
-    case OpFalse:
-      return simple_inst("OpFalse", offset);
-    case OpNot: 
-      return simple_inst("OpNot", offset);
-    case OpNeg:
-      return simple_inst("OpNeg", offset);
-    case OpEq:
-      return simple_inst("OpEq", offset);
-    case OpGt:
-      return simple_inst("OpGt", offset);
-    case OpLt:
-      return simple_inst("OpLt", offset);
-    case OpAdd:
-      return simple_inst("OpAdd", offset);
-    case OpSub:
-      return simple_inst("OpSub", offset);
-    case OpMul:
-      return simple_inst("OpMul", offset);
-    case OpDiv:
-      return simple_inst("OpDiv", offset);
-    case OpPrint:
-      return simple_inst("OpPrint", offset);
-    case OpPop:
-      return simple_inst("OpPop", offset);
-    default: {
-      printf("Unknown opcode %d\n", inst);
-      return offset + 1;
-    }
+  case OpRet:
+    return simple_inst("OpRet", offset);
+  case OpConst:
+    return constant_inst("OpConst", chunk, offset);
+  case OpConstLong:
+    return constant_long_inst("OpConstLong", chunk, offset);
+  case OpNull:
+    return simple_inst("OpNull", offset);
+  case OpTrue:
+    return simple_inst("OpTrue", offset);
+  case OpFalse:
+    return simple_inst("OpFalse", offset);
+  case OpNot:
+    return simple_inst("OpNot", offset);
+  case OpNeg:
+    return simple_inst("OpNeg", offset);
+  case OpDefineGlobal:
+    return constant_inst("OpDefineGlobal", chunk, offset);
+  case OpEq:
+    return simple_inst("OpEq", offset);
+  case OpGt:
+    return simple_inst("OpGt", offset);
+  case OpLt:
+    return simple_inst("OpLt", offset);
+  case OpAdd:
+    return simple_inst("OpAdd", offset);
+  case OpSub:
+    return simple_inst("OpSub", offset);
+  case OpMul:
+    return simple_inst("OpMul", offset);
+  case OpDiv:
+    return simple_inst("OpDiv", offset);
+  case OpPrint:
+    return simple_inst("OpPrint", offset);
+  case OpPop:
+    return simple_inst("OpPop", offset);
+  default: {
+    printf("Unknown opcode %d\n", inst);
+    return offset + 1;
+  }
   }
 }
 
