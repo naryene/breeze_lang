@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "chunk.h"
 #include "common.h"
@@ -133,9 +134,9 @@ static uint32_t emit_constant(const Value value) {
   return push_constant(current_chunk(), value, parser.previous.line);
 }
 
-static void emit_name(const Token name) {
-  ObjString *string = copy_string(name.start, name.len);
-  emit_constant(OBJ_VAL(string));
+static uint32_t emit_name(const Token *name) {
+  ObjString *string = copy_string(name->start, name->len);
+  return emit_constant(OBJ_VAL(string));
 }
 
 static void init_compiler(Compiler *compiler) {
@@ -152,6 +153,18 @@ static void end_compiler() {
     disassemble_chunk(current_chunk(), "code");
   }
 #endif /* ifdef DEBUG_PRINT_CODE */
+}
+
+static void begin_scope() { current_compiler->scope_depth += 1; }
+
+static void end_scope() {
+  current_compiler->scope_depth -= 1;
+  while (current_compiler->local_count > 0 &&
+         current_compiler->locals[current_compiler->local_count - 1].depth >
+             current_compiler->scope_depth) {
+    emit_byte(OpPop);
+    current_compiler->local_count -= 1;
+  }
 }
 
 static void parse_precedence(Precedence precedence);
@@ -171,7 +184,6 @@ static void print_statement();
 
 static ParseRule *get_rule(TokenType type);
 
-
 bool compile(const char *source, Chunk *chunk) {
   init_scanner(source);
   Compiler compiler;
@@ -188,7 +200,6 @@ bool compile(const char *source, Chunk *chunk) {
   end_compiler();
   return !parser.had_error;
 }
-
 
 ParseRule rules[] = {
     [TokenLeftParen] = {grouping, NULL, PrecNone},
@@ -257,9 +268,12 @@ static void parse_precedence(Precedence precedence) {
   }
 }
 
-static void define_variable(const Token name) {
-  emit_byte(OpDefineGlobal);
-  emit_name(name);
+static void define_variable(uint8_t global) {
+  if (current_compiler->scope_depth > 0) {
+    return;
+  }
+
+  emit_word(OpDefineGlobal, global);
 }
 
 static void grouping(bool can_assign) {
@@ -277,7 +291,9 @@ static void string(bool can_assign) {
       OBJ_VAL(copy_string(parser.previous.start + 1, parser.previous.len - 2)));
 }
 
-static void named_variable(Token name, bool can_assign) {
+static void named_variable(const Token *name, bool can_assign) {
+  uint8_t get_op, set_op;
+  
 
   if (can_assign && match(TokenEqual)) {
     expression();
@@ -287,8 +303,9 @@ static void named_variable(Token name, bool can_assign) {
   }
   emit_name(name);
 }
+
 static void variable(bool can_assign) {
-  named_variable(parser.previous, can_assign);
+  named_variable(&parser.previous, can_assign);
 }
 
 static void unary(bool can_assign) {
@@ -382,9 +399,67 @@ static void literal(bool can_assign) {
 
 static void expression() { parse_precedence(PrecAssignment); }
 
+static void block() {
+  while (!check(TokenRightBrace) && !check(TokenEof)) {
+    declaration();
+  }
+
+  consume(TokenRightBrace, "Expect '}' after block.");
+}
+
+static void add_local(const Token *name) {
+  // My version is able to contain more local
+  // variables, but i'm trying to do same as clox
+  // for now
+  if (current_compiler->local_count == UINT8_COUNT) {
+    error("Too many local variabls in function.");
+    return;
+  }
+  Local *local = &current_compiler->locals[current_compiler->local_count];
+  current_compiler->local_count += 1;
+  local->name = *name;
+  local->depth = current_compiler->scope_depth;
+}
+
+static bool same_name(const Token *name, const Token *other) {
+  if (name->len != other->len) {
+    return false;
+  }
+  return memcmp(name->start, other->start, name->len) == 0;
+}
+
+static void declare_variable() {
+  if (current_compiler->scope_depth == 0) {
+    return;
+  }
+
+  Token *name = &parser.previous;
+  for (uint32_t i = current_compiler->local_count - 1; i >= 0; i -= 1) {
+    Local *local = &current_compiler->locals[i];
+    if (local->depth != -1 && local->depth < current_compiler->scope_depth) {
+      break;
+    }
+
+    if (same_name(name, &local->name)) {
+      error("Already a variable with this name in this scope.");
+    }
+  }
+  add_local(name);
+}
+
+static uint32_t parse_variable(const char *message) {
+  consume(TokenIdentifier, message);
+
+  declare_variable();
+  if (current_compiler->scope_depth > 0) {
+    return 0;
+  }
+
+  return emit_name(&parser.previous);
+}
+
 static void var_declaration() {
-  consume(TokenIdentifier, "Expect variable name.");
-  const Token identifier = parser.previous;
+  uint8_t global = parse_variable("Expect variable name.");
 
   if (match(TokenEqual)) {
     expression();
@@ -394,7 +469,7 @@ static void var_declaration() {
 
   consume(TokenSemiColon, "Expect ';' after variable declaration.");
 
-  define_variable(identifier);
+  define_variable(global);
 }
 
 static void synchronize() {
@@ -436,6 +511,10 @@ static void expression_statement() {
 static void statement() {
   if (match(TokenPrint)) {
     print_statement();
+  } else if (match(TokenLeftBrace)) {
+    begin_scope();
+    block();
+    end_scope();
   } else {
     expression_statement();
   }
@@ -452,5 +531,3 @@ static void declaration() {
     synchronize();
   }
 }
-
-
