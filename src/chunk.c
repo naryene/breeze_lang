@@ -90,7 +90,7 @@ uint32_t push_constant(Chunk *chunk, Value value, uint32_t line) {
   write_value_vec(&chunk->constants, value);
   uint32_t idx = chunk->constants.len - 1;
 
-  if (idx < 256) {
+  if (idx < UINT8_MAX) {
     write_chunk(chunk, OpConst, line);
     write_chunk(chunk, (uint8_t)idx, line);
     return idx;

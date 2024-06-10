@@ -64,6 +64,8 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
     return simple_inst("OpGetGlobal",  offset);
   case OpDefineGlobal:
     return simple_inst("OpDefineGlobal",  offset);
+  case OpSetGlobal:
+    return constant_inst("OpSetGlobal", chunk, offset);
   case OpEq:
     return simple_inst("OpEq", offset);
   case OpGt:

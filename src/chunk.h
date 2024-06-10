@@ -23,6 +23,7 @@ typedef enum {
   OpPrint,
   OpPop,
   OpDefineGlobal,
+  OpSetGlobal,
   OpGetGlobal,
 } OpCode;
 

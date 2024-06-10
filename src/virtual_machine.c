@@ -172,6 +172,15 @@ static InterpretResult run() {
       pop_stack();
       break;
     }
+    case OpSetGlobal: {
+      ObjString *name = READ_STRING();
+      if (table_insert(&vm.globals, name, peek(0))) {
+        table_remove(&vm.globals, name);
+        runtime_error("Undefined variable '%s'.", name->chars);
+        return InterpretRuntimeErr;
+      }
+      break;
+    }
     case OpEq: {
       Value right = pop_stack();
       Value left = pop_stack();

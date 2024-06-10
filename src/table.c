@@ -119,7 +119,7 @@ void table_copy(const Table *src, Table *dest) {
   }
 }
 
-ObjString *table_find_string(Table *table, const char *chars, uint32_t len,
+ObjString* table_find_string(Table *table, const char *chars, uint32_t len,
                              uint32_t hash) {
   if (table->len == 0) {
     return NULL;
