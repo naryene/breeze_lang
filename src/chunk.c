@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdlib.h>
 
 #include "chunk.h"
@@ -100,4 +101,17 @@ uint32_t push_constant(Chunk *chunk, Value value, uint32_t line) {
   write_chunk(chunk, (uint8_t)((idx >> 8) & 0xff), line);
   write_chunk(chunk, (uint8_t)((idx >> 16) & 0xff), line);
   return idx;
+}
+
+void write_constant_chunk(Chunk *chunk, uint32_t constant, uint32_t line) {
+  if (constant < UINT8_MAX) {
+    write_chunk(chunk, OpConst, line);
+    write_chunk(chunk, (uint8_t) constant, line);
+    return;
+  }
+  write_chunk(chunk, OpConstLong, line);
+  write_chunk(chunk, (uint8_t)(constant & 0xff), line);
+  write_chunk(chunk, (uint8_t)((constant >> 8) & 0xff), line);
+  write_chunk(chunk, (uint8_t)((constant >> 16) & 0xff), line);
+  return;
 }

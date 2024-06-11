@@ -48,7 +48,7 @@ typedef struct {
 
 typedef struct {
   Token name;
-  uint32_t depth;
+  int32_t depth;
 } Local;
 
 typedef struct {
@@ -134,6 +134,10 @@ static uint32_t emit_constant(const Value value) {
   return push_constant(current_chunk(), value, parser.previous.line);
 }
 
+static void emit_constant_chunk(const uint32_t constant) {
+  write_constant_chunk(current_chunk(), constant, parser.previous.line);
+}
+
 static uint32_t emit_name(const Token *name) {
   ObjString *string = copy_string(name->start, name->len);
   return emit_constant(OBJ_VAL(string));
@@ -167,6 +171,70 @@ static void end_scope() {
   }
 }
 
+static bool same_name(const Token *name, const Token *other) {
+  if (name->len != other->len) {
+    return false;
+  }
+  return memcmp(name->start, other->start, name->len) == 0;
+}
+
+static int32_t resolve_local(Compiler *compiler, const Token *name) {
+  for (int32_t i = compiler->local_count - 1; i >= 0; i -= 1) {
+    Local *local = &compiler->locals[i];
+    printf("the type is %d\n", i);
+    if (same_name(name, &local->name)) {
+      if (local->depth == -1) {
+        error("Cannot read local variable in its own initializer.");
+      }
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void add_local(const Token *name) {
+  // My version is able to contain more local
+  // variables, but i'm trying to do same as clox
+  // for now
+  if (current_compiler->local_count == UINT8_COUNT) {
+    error("Too many local variabls in function.");
+    return;
+  }
+  Local *local = &current_compiler->locals[current_compiler->local_count];
+  current_compiler->local_count += 1;
+  local->name = *name;
+  local->depth = -1;
+}
+
+static void declare_variable() {
+  if (current_compiler->scope_depth == 0) {
+    return;
+  }
+
+  Token *name = &parser.previous;
+  for (uint32_t i = current_compiler->local_count - 1; i >= 0; i -= 1) {
+    Local *local = &current_compiler->locals[i];
+    if (local->depth != -1 && local->depth < current_compiler->scope_depth) {
+      break;
+    }
+    if (same_name(name, &local->name)) {
+      error("Already a variable with this name in this scope.");
+    }
+  }
+  add_local(name);
+}
+
+static uint32_t parse_variable(const char *message) {
+  consume(TokenIdentifier, message);
+
+  declare_variable();
+  if (current_compiler->scope_depth > 0) {
+    return 0;
+  }
+
+  return emit_name(&parser.previous);
+}
+
 static void parse_precedence(Precedence precedence);
 static void expression();
 
@@ -179,6 +247,7 @@ static void string(bool can_assign);
 static void variable(bool can_assign);
 
 static void declaration();
+static void block();
 static void statement();
 static void print_statement();
 
@@ -268,12 +337,19 @@ static void parse_precedence(Precedence precedence) {
   }
 }
 
-static void define_variable(uint8_t global) {
+static void init_variable() {
+  current_compiler->locals[current_compiler->local_count - 1].depth =
+      current_compiler->scope_depth;
+}
+
+static void define_variable(uint32_t global) {
   if (current_compiler->scope_depth > 0) {
+    init_variable();
     return;
   }
 
-  emit_word(OpDefineGlobal, global);
+  emit_byte(OpDefineGlobal);
+  emit_constant_chunk(global);
 }
 
 static void grouping(bool can_assign) {
@@ -293,13 +369,21 @@ static void string(bool can_assign) {
 
 static void named_variable(const Token *name, bool can_assign) {
   uint8_t get_op, set_op;
-  
+  int32_t arg = resolve_local(current_compiler, name);
+  printf("the arg is %d \n", arg);
+  if (arg != -1) {
+    get_op = OpGetLocal;
+    set_op = OpSetLocal;
+  } else {
+    get_op = OpGetGlobal;
+    set_op = OpSetGlobal;
+  }
 
   if (can_assign && match(TokenEqual)) {
     expression();
-    emit_byte(OpSetGlobal);
+    emit_byte(set_op);
   } else {
-    emit_byte(OpGetGlobal);
+    emit_byte(get_op);
   }
   emit_name(name);
 }
@@ -397,81 +481,6 @@ static void literal(bool can_assign) {
   }
 }
 
-static void expression() { parse_precedence(PrecAssignment); }
-
-static void block() {
-  while (!check(TokenRightBrace) && !check(TokenEof)) {
-    declaration();
-  }
-
-  consume(TokenRightBrace, "Expect '}' after block.");
-}
-
-static void add_local(const Token *name) {
-  // My version is able to contain more local
-  // variables, but i'm trying to do same as clox
-  // for now
-  if (current_compiler->local_count == UINT8_COUNT) {
-    error("Too many local variabls in function.");
-    return;
-  }
-  Local *local = &current_compiler->locals[current_compiler->local_count];
-  current_compiler->local_count += 1;
-  local->name = *name;
-  local->depth = current_compiler->scope_depth;
-}
-
-static bool same_name(const Token *name, const Token *other) {
-  if (name->len != other->len) {
-    return false;
-  }
-  return memcmp(name->start, other->start, name->len) == 0;
-}
-
-static void declare_variable() {
-  if (current_compiler->scope_depth == 0) {
-    return;
-  }
-
-  Token *name = &parser.previous;
-  for (uint32_t i = current_compiler->local_count - 1; i >= 0; i -= 1) {
-    Local *local = &current_compiler->locals[i];
-    if (local->depth != -1 && local->depth < current_compiler->scope_depth) {
-      break;
-    }
-
-    if (same_name(name, &local->name)) {
-      error("Already a variable with this name in this scope.");
-    }
-  }
-  add_local(name);
-}
-
-static uint32_t parse_variable(const char *message) {
-  consume(TokenIdentifier, message);
-
-  declare_variable();
-  if (current_compiler->scope_depth > 0) {
-    return 0;
-  }
-
-  return emit_name(&parser.previous);
-}
-
-static void var_declaration() {
-  uint8_t global = parse_variable("Expect variable name.");
-
-  if (match(TokenEqual)) {
-    expression();
-  } else {
-    emit_byte(OpNull);
-  }
-
-  consume(TokenSemiColon, "Expect ';' after variable declaration.");
-
-  define_variable(global);
-}
-
 static void synchronize() {
   parser.panic_mode = false;
 
@@ -496,6 +505,22 @@ static void synchronize() {
   }
 }
 
+static void expression() { parse_precedence(PrecAssignment); }
+
+static void var_declaration() {
+  uint32_t global = parse_variable("Expect variable name.");
+
+  if (match(TokenEqual)) {
+    expression();
+  } else {
+    emit_byte(OpNull);
+  }
+
+  consume(TokenSemiColon, "Expect ';' after variable declaration.");
+
+  define_variable(global);
+}
+
 static void print_statement() {
   expression();
   consume(TokenSemiColon, "Expect ';' after value.");
@@ -506,6 +531,14 @@ static void expression_statement() {
   expression();
   consume(TokenSemiColon, "Expect ';' after value.");
   emit_byte(OpPop);
+}
+
+static void block() {
+  while (!check(TokenRightBrace) && !check(TokenEof)) {
+    declaration();
+  }
+
+  consume(TokenRightBrace, "Expect '}' after block.");
 }
 
 static void statement() {

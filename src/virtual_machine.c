@@ -181,6 +181,16 @@ static InterpretResult run() {
       }
       break;
     }
+    case OpGetLocal: {
+      uint8_t local_stack_idx = READ_BYTE();
+      push_stack(vm.stack[local_stack_idx]);
+      break;
+    }
+    case OpSetLocal: {
+      uint8_t local_stack_idx = READ_BYTE();
+      vm.stack[local_stack_idx] = peek(0);
+      break;
+    }
     case OpEq: {
       Value right = pop_stack();
       Value left = pop_stack();
