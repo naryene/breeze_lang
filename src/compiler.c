@@ -130,7 +130,6 @@ static void emit_word(uint8_t byte1, uint8_t byte2) {
 
 static void emit_return() { emit_byte(OpRet); }
 
-
 // Emits a constant into chunk and  constants array
 static uint32_t emit_constant(const Value value) {
   return push_constant(current_chunk(), value, parser.previous.line);
@@ -142,13 +141,19 @@ static uint32_t emit_constant_(const Value constant) {
 }
 
 // Emits a constant into chunk
-static void emit_constant_idx(const uint32_t idx){
+static void emit_constant_idx(const uint32_t idx) {
   write_constant_chunk(current_chunk(), idx, parser.previous.line);
 }
 
 static uint32_t emit_name(const Token *name) {
   ObjString *string = copy_string(name->start, name->len);
   return emit_constant_(OBJ_VAL(string));
+}
+
+static uint32_t emit_jump(uint8_t inst) {
+  emit_byte(inst);
+  emit_word(0xff, 0xff);
+  return current_chunk()->len - 2;
 }
 
 static void init_compiler(Compiler *compiler) {
@@ -189,7 +194,6 @@ static bool same_name(const Token *name, const Token *other) {
 static int32_t resolve_local(Compiler *compiler, const Token *name) {
   for (int32_t i = compiler->local_count - 1; i >= 0; i -= 1) {
     Local *local = &compiler->locals[i];
-    printf("the type is %d\n", i);
     if (same_name(name, &local->name)) {
       if (local->depth == -1) {
         error("Cannot read local variable in its own initializer.");
@@ -220,7 +224,7 @@ static void declare_variable() {
   }
 
   Token *name = &parser.previous;
-  for (uint32_t i = current_compiler->local_count - 1; i >= 0; i -= 1) {
+  for (int32_t i = current_compiler->local_count - 1; i >= 0; i -= 1) {
     Local *local = &current_compiler->locals[i];
     if (local->depth != -1 && local->depth < current_compiler->scope_depth) {
       break;
@@ -239,7 +243,6 @@ static uint32_t parse_variable(const char *message) {
   if (current_compiler->scope_depth > 0) {
     return 0;
   }
-
   return emit_name(&parser.previous);
 }
 
@@ -386,7 +389,6 @@ static void named_variable(const Token *name, bool can_assign) {
     set_op = OpSetGlobal;
   }
 
-  printf("the arg is %d \n", arg);
   if (can_assign && match(TokenEqual)) {
     expression();
     emit_byte(set_op);
@@ -516,7 +518,7 @@ static void synchronize() {
 static void expression() { parse_precedence(PrecAssignment); }
 
 static void var_declaration() {
-  uint32_t global = parse_variable("Expect variable name.");
+  uint32_t variable = parse_variable("Expect variable name.");
 
   if (match(TokenEqual)) {
     expression();
@@ -526,7 +528,7 @@ static void var_declaration() {
 
   consume(TokenSemiColon, "Expect ';' after variable declaration.");
 
-  define_variable(global);
+  define_variable(variable);
 }
 
 static void print_statement() {
@@ -549,9 +551,22 @@ static void block() {
   consume(TokenRightBrace, "Expect '}' after block.");
 }
 
+static void if_statement() {
+  consume(TokenLeftBrace, "Expect '(' after 'if'.");
+  expression();
+  consume(TokenRightBrace, "Expect ')' after condition.");
+ 
+  uint32_t then_jump = emit_jump(OpJumpIfFalse);
+  statement();
+
+  patch_jump(then_jump);
+}
+
 static void statement() {
   if (match(TokenPrint)) {
     print_statement();
+  } else if (match(TokenIf)) {
+    if_statement();
   } else if (match(TokenLeftBrace)) {
     begin_scope();
     block();

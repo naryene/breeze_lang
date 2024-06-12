@@ -20,11 +20,20 @@ static uint32_t constant_inst(const char *name, const Chunk *chunk,
   return offset + 2;
 }
 
-static uint32_t byte_inst(const char *name, const Chunk *chunk,
+static uint32_t special_inst(const char *name, const Chunk *chunk,
                           uint32_t offset) {
-  uint8_t slot = chunk->code[offset + 1];
-  printf("%-16s %4d '", name, slot);
-  return offset + 2;
+  uint8_t op = chunk->code[offset + 1];
+  uint32_t slot;
+  if (op == OpConst) {
+    slot = chunk->code[offset+2];
+    offset += 3;
+  } else {
+    slot = (uint32_t)(chunk->code[offset+2] | (chunk->code[offset+3] << 8) | (chunk->code[offset+4] << 16));
+    offset +=5;
+  }
+  printf("%-16s %4d\n", name, slot);
+
+  return offset;
 }
 
 static uint32_t constant_long_inst(const char *name, const Chunk *chunk,
@@ -74,9 +83,9 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   case OpSetGlobal:
     return constant_inst("OpSetGlobal", chunk, offset);
   case OpGetLocal:
-    return byte_inst("OpGetLocal", chunk, offset);
+    return special_inst("OpGetLocal", chunk, offset);
   case OpSetLocal:
-    return byte_inst("OpSetLocal", chunk, offset);
+    return special_inst("OpSetLocal", chunk, offset);
   case OpEq:
     return simple_inst("OpEq", offset);
   case OpGt:

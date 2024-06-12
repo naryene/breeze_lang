@@ -95,15 +95,23 @@ static InterpretResult run() {
     vm.chunk->constants.values[idx];                                           \
   })
 
-#define READ_STRING()                                                          \
+#define READ_IDX()                                                             \
   ({                                                                           \
     uint8_t constant_op = READ_BYTE();                                         \
-    Value constant;                                                            \
+    uint32_t idx;                                                              \
     if (constant_op == OpConst) {                                              \
-      constant = READ_CONSTANT();                                              \
+      idx = (uint32_t)READ_BYTE();                                             \
     } else {                                                                   \
-      constant = READ_CONSTANT_LONG();                                         \
+      idx = (uint32_t)((READ_BYTE()) | (READ_BYTE() << 8) |                    \
+                       (READ_BYTE() << 16));                                   \
     }                                                                          \
+    idx;                                                                       \
+  })
+
+#define READ_STRING()                                                          \
+  ({                                                                           \
+    uint32_t idx = READ_IDX();                                                 \
+    Value constant = vm.chunk->constants.values[idx];                          \
     AS_STRING(constant);                                                       \
   })
 
@@ -182,12 +190,12 @@ static InterpretResult run() {
       break;
     }
     case OpGetLocal: {
-      uint8_t local_stack_idx = READ_BYTE();
+      uint32_t local_stack_idx = READ_IDX();
       push_stack(vm.stack[local_stack_idx]);
       break;
     }
     case OpSetLocal: {
-      uint8_t local_stack_idx = READ_BYTE();
+      uint32_t local_stack_idx = READ_IDX();
       vm.stack[local_stack_idx] = peek(0);
       break;
     }

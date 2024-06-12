@@ -47,7 +47,6 @@ typedef struct {
   uint8_t *code;
   LineVec lines;
   ValueVec constants;
-
 } Chunk;
 
 uint32_t get_line(LineVec lines, uint32_t offset);

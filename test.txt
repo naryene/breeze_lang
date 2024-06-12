@@ -1,2 +1,8 @@
-1+1;
-2+3;
+let x = 12;
+{
+  let r = 83;
+  x= x +r;
+  print r;
+}
+print x;
+
