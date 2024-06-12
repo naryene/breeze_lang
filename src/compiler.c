@@ -130,17 +130,25 @@ static void emit_word(uint8_t byte1, uint8_t byte2) {
 
 static void emit_return() { emit_byte(OpRet); }
 
+
+// Emits a constant into chunk and  constants array
 static uint32_t emit_constant(const Value value) {
   return push_constant(current_chunk(), value, parser.previous.line);
 }
 
-static void emit_constant_chunk(const uint32_t constant) {
-  write_constant_chunk(current_chunk(), constant, parser.previous.line);
+// Emits a constant into constant array
+static uint32_t emit_constant_(const Value constant) {
+  return add_constant(current_chunk(), constant);
+}
+
+// Emits a constant into chunk
+static void emit_constant_idx(const uint32_t idx){
+  write_constant_chunk(current_chunk(), idx, parser.previous.line);
 }
 
 static uint32_t emit_name(const Token *name) {
   ObjString *string = copy_string(name->start, name->len);
-  return emit_constant(OBJ_VAL(string));
+  return emit_constant_(OBJ_VAL(string));
 }
 
 static void init_compiler(Compiler *compiler) {
@@ -347,9 +355,8 @@ static void define_variable(uint32_t global) {
     init_variable();
     return;
   }
-
   emit_byte(OpDefineGlobal);
-  emit_constant_chunk(global);
+  emit_constant_idx(global);
 }
 
 static void grouping(bool can_assign) {
@@ -370,22 +377,23 @@ static void string(bool can_assign) {
 static void named_variable(const Token *name, bool can_assign) {
   uint8_t get_op, set_op;
   int32_t arg = resolve_local(current_compiler, name);
-  printf("the arg is %d \n", arg);
   if (arg != -1) {
     get_op = OpGetLocal;
     set_op = OpSetLocal;
   } else {
+    arg = emit_name(name);
     get_op = OpGetGlobal;
     set_op = OpSetGlobal;
   }
 
+  printf("the arg is %d \n", arg);
   if (can_assign && match(TokenEqual)) {
     expression();
     emit_byte(set_op);
   } else {
     emit_byte(get_op);
   }
-  emit_name(name);
+  emit_constant_idx(arg);
 }
 
 static void variable(bool can_assign) {
