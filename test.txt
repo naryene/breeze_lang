@@ -1,8 +1,4 @@
 let x = 12;
-{
-  let r = 83;
-  x= x +r;
-  print r;
+if (x > 10 && x==x) {
+ print "hi";
 }
-print x;
-

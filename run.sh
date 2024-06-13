@@ -1,5 +1,5 @@
 make target
 make clean
 clear
-./target
+./target test.txt
 

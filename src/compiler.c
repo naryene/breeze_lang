@@ -26,11 +26,11 @@ typedef struct {
 typedef enum {
   PrecNone,
   PrecAssignment, // =
-  PrecOr,         // or
-  PrecAnd,        // and
+  PrecOrOr,         // || 
+  PrecAndAnd,        // &&
   PrecEquality,   // == !=
   PrecComparison, // < > <= >=
-  PrecTerm,       // + -
+  PrecTerm,       // + - 
   PrecFactor,     // * /
   PrecUnary,      // ! -
   PrecCall,       // . (
@@ -284,7 +284,8 @@ static void binary(bool can_assign);
 static void literal(bool can_assign);
 static void string(bool can_assign);
 static void variable(bool can_assign);
-static void and_(bool can_assign);
+static void and_and_(bool can_assign);
+static void or_or_(bool can_assign);
 
 static void declaration();
 static void block();
@@ -333,7 +334,7 @@ ParseRule rules[] = {
     [TokenIdentifier] = {variable, NULL, PrecNone},
     [TokenString] = {string, NULL, PrecNone},
     [TokenNumber] = {number, NULL, PrecNone},
-    [TokenAnd] = {NULL, and_, PrecNone},
+    [TokenAndAnd] = {NULL, and_and_, PrecAndAnd},
     [TokenClass] = {NULL, NULL, PrecNone},
     [TokenElse] = {NULL, NULL, PrecNone},
     [TokenFalse] = {literal, NULL, PrecNone},
@@ -342,7 +343,7 @@ ParseRule rules[] = {
     [TokenIf] = {NULL, NULL, PrecNone},
     [TokenLet] = {NULL, NULL, PrecNone},
     [TokenNull] = {literal, NULL, PrecNone},
-    [TokenOr] = {NULL, NULL, PrecNone},
+    [TokenOrOr] = {NULL, or_or_, PrecOrOr},
     [TokenPrint] = {NULL, NULL, PrecNone},
     [TokenReturn] = {NULL, NULL, PrecNone},
     [TokenSuper] = {NULL, NULL, PrecNone},
@@ -450,12 +451,23 @@ static void unary(bool can_assign) {
   }
 }
 
-static void and_(bool can_assign) {
+static void and_and_(bool can_assign) {
   int32_t end_jmp = emit_jmp(OpJmpIfFalse);
 
   emit_jmp(OpPop);
-  parse_precedence(PrecAnd);
+  parse_precedence(PrecAndAnd);
 
+  patch_jmp(end_jmp);
+}
+
+static void or_or_(bool can_assign) {
+  int32_t else_jmp = emit_jmp(OpJmpIfFalse);
+  int32_t end_jmp = emit_jmp(OpJmp);
+
+  patch_jmp(else_jmp);
+  emit_byte(OpPop);
+
+  parse_precedence(PrecOrOr);
   patch_jmp(end_jmp);
 }
 
