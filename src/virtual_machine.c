@@ -54,7 +54,7 @@ void push_stack(Value value) {
     vm.stack_ptr += 1;
     return;
   }
-  printf("Error: STACK OVERFLOW");
+  runtime_error("Error: STACK OVERFLOW");
   exit(1);
 }
 
@@ -66,6 +66,14 @@ Value pop_stack() {
 // Peeks at a `Value` in the VM stack.
 static Value peek(uint32_t distance) {
   return vm.stack_ptr[(int32_t)(-1 - distance)];
+}
+
+static InterpretResult check_bool(Value value) {
+  if (!IS_BOOL(value)) {
+    runtime_error("Operand must be a boolean.");
+    return InterpretRuntimeErr;
+  }
+  return InterpretOk;
 }
 
 static void concat() {
@@ -86,6 +94,9 @@ static InterpretResult run() {
   /*** MACROS DEFINITION ***/
 
 #define READ_BYTE() (vm.inst_ptr += 1, *(vm.inst_ptr - 1))
+
+#define READ_WORD()                                                            \
+  (vm.inst_ptr += 2, (uint16_t)(vm.inst_ptr[-2] | (vm.inst_ptr[-1] << 8)))
 
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 
@@ -247,10 +258,11 @@ static InterpretResult run() {
       break;
     }
     case OpNot: {
-      if (!IS_BOOL(peek(0))) {
-        runtime_error("Operand must be a boolean.");
-        return InterpretRuntimeErr;
+      InterpretResult check_result = check_bool(peek(0));
+      if (check_result == InterpretRuntimeErr) {
+        return check_result;
       }
+
       push_stack(BOOL_VAL(!AS_BOOL(pop_stack())));
       break;
     }
@@ -263,14 +275,29 @@ static InterpretResult run() {
       pop_stack();
       break;
     }
+    case OpJmpIfFalse: {
+      uint16_t offset = READ_WORD();
+      InterpretResult check_result = check_bool(peek(0));
+      if (check_result == InterpretRuntimeErr) {
+        return check_result;
+      }
+
+      if (AS_BOOL(peek(0)) == false) {
+        vm.inst_ptr += offset;
+      }
+
+      break;
+    }
     case OpRet: {
       return InterpretOk;
     }
     }
   }
 #undef READ_BYTE
+#undef READ_WORD
 #undef READ_CONSTANT
 #undef READ_CONSTANT_LONG
+#undef READ_IDX
 #undef READ_STRING
 #undef BINARY_OP
 }

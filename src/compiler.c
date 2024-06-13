@@ -14,7 +14,7 @@
 #include "debug.h"
 #endif
 
-#define UINT8_COUNT (UINT8_MAX + 1)
+#define UINT16_COUNT (UINT16_MAX + 1)
 
 typedef struct {
   Token current;
@@ -52,7 +52,7 @@ typedef struct {
 } Local;
 
 typedef struct {
-  Local locals[UINT8_COUNT];
+  Local locals[UINT16_COUNT];
   uint32_t local_count;
   uint32_t scope_depth;
 } Compiler;
@@ -130,18 +130,37 @@ static void emit_word(uint8_t byte1, uint8_t byte2) {
 
 static void emit_return() { emit_byte(OpRet); }
 
+static bool max_constants_error(const uint32_t idx) {
+  if (idx > UINT16_MAX) {
+    error("Too many constants in one chunk.");
+    return true;
+  }
+  return false;
+}
+
 // Emits a constant into chunk and  constants array
 static uint32_t emit_constant(const Value value) {
-  return push_constant(current_chunk(), value, parser.previous.line);
+  uint32_t idx = push_constant(current_chunk(), value, parser.previous.line);
+  if (max_constants_error(idx)) {
+    return 0;
+  }
+  return idx;
 }
 
 // Emits a constant into constant array
 static uint32_t emit_constant_(const Value constant) {
-  return add_constant(current_chunk(), constant);
+  uint32_t idx = add_constant(current_chunk(), constant);
+  if (max_constants_error(idx)) {
+    return 0;
+  }
+  return idx;
 }
 
 // Emits a constant into chunk
 static void emit_constant_idx(const uint32_t idx) {
+  if (max_constants_error(idx)) {
+    return;
+  }
   write_constant_chunk(current_chunk(), idx, parser.previous.line);
 }
 
@@ -150,10 +169,19 @@ static uint32_t emit_name(const Token *name) {
   return emit_constant_(OBJ_VAL(string));
 }
 
-static uint32_t emit_jump(uint8_t inst) {
+static uint32_t emit_jmp(uint8_t inst) {
   emit_byte(inst);
   emit_word(0xff, 0xff);
   return current_chunk()->len - 2;
+}
+
+static void patch_jmp(int32_t offset) {
+  int32_t jmp = current_chunk()->len - offset - 2;
+  if (jmp > UINT16_MAX) {
+    error("Too much code to jump over.");
+  }
+  current_chunk()->code[offset] = (jmp)&0xff;
+  current_chunk()->code[offset + 1] = (jmp >> 8) & 0xff;
 }
 
 static void init_compiler(Compiler *compiler) {
@@ -208,7 +236,7 @@ static void add_local(const Token *name) {
   // My version is able to contain more local
   // variables, but i'm trying to do same as clox
   // for now
-  if (current_compiler->local_count == UINT8_COUNT) {
+  if (current_compiler->local_count == UINT16_COUNT) {
     error("Too many local variabls in function.");
     return;
   }
@@ -552,14 +580,15 @@ static void block() {
 }
 
 static void if_statement() {
-  consume(TokenLeftBrace, "Expect '(' after 'if'.");
   expression();
-  consume(TokenRightBrace, "Expect ')' after condition.");
- 
-  uint32_t then_jump = emit_jump(OpJumpIfFalse);
-  statement();
 
-  patch_jump(then_jump);
+  uint32_t then_jmp = emit_jmp(OpJmpIfFalse);
+
+  consume(TokenLeftBrace, "Expect '{' after 'if' statement.");
+  statement();
+  consume(TokenRightBrace, "Expect '}' after to close '{'.");
+
+  patch_jmp(then_jmp);
 }
 
 static void statement() {

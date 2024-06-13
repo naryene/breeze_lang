@@ -27,6 +27,7 @@ typedef enum {
   OpGetGlobal,
   OpSetLocal,
   OpGetLocal,
+  OpJmpIfFalse,
 } OpCode;
 
 /***

@@ -96,6 +96,10 @@ uint32_t add_constant(Chunk *chunk, Value value) {
 uint32_t push_constant(Chunk *chunk, Value value, uint32_t line) {
   uint32_t idx = add_constant(chunk, value);
 
+  if (idx > UINT16_MAX) {
+    return UINT32_MAX;
+  }
+
   if (idx < UINT8_MAX) {
     write_chunk(chunk, OpConst, line);
     write_chunk(chunk, (uint8_t)idx, line);
