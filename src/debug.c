@@ -13,39 +13,46 @@ static uint32_t simple_inst(const char *name, uint32_t offset) {
 
 static uint32_t constant_inst(const char *name, const Chunk *chunk,
                               uint32_t offset) {
-  uint8_t constant_idx = chunk->code[offset + 1];
+  uint8_t constant_op = chunk->code[offset];
+  uint8_t constant_idx;
+  if (constant_op == OpConst) {
+    constant_idx = chunk->code[offset + 1];
+    offset += 2;
+  } else {
+    constant_idx = chunk->code[offset + 1] | (chunk->code[offset + 2] << 8) |
+                   (chunk->code[offset + 3] << 16);
+    offset += 4;
+  }
   printf("%-16s %4d '", name, constant_idx);
   print_value(chunk->constants.values[constant_idx]);
   printf("'\n");
-  return offset + 2;
+  return offset;
 }
 
 static uint32_t special_inst(const char *name, const Chunk *chunk,
-                          uint32_t offset) {
+                             uint32_t offset) {
   uint8_t op = chunk->code[offset + 1];
   uint32_t slot;
   if (op == OpConst) {
-    slot = chunk->code[offset+2];
+    slot = chunk->code[offset + 2];
     offset += 3;
   } else {
-    slot = (uint32_t)(chunk->code[offset+2] | (chunk->code[offset+3] << 8) | (chunk->code[offset+4] << 16));
-    offset +=5;
+    slot = (uint32_t)(chunk->code[offset + 2] | (chunk->code[offset + 3] << 8) |
+                      (chunk->code[offset + 4] << 16));
+    offset += 5;
   }
   printf("%-16s %4d\n", name, slot);
 
   return offset;
 }
 
-static uint32_t constant_long_inst(const char *name, const Chunk *chunk,
-                                   uint32_t offset) {
-  uint32_t constant_long_idx = chunk->code[offset + 1] |
-                               (chunk->code[offset + 2] << 8) |
-                               (chunk->code[offset + 3] << 16);
-
-  printf("%-16s %4d '", name, constant_long_idx);
-  print_value(chunk->constants.values[constant_long_idx]);
-  printf("\n");
-  return offset + 4;
+static uint32_t jmp_inst(const char *name, int8_t sign, Chunk *chunk,
+                         uint32_t offset) {
+  uint16_t jmp = (uint16_t) chunk->code[offset+1];
+  jmp |= chunk->code[offset+2] << 8;
+  offset +=3;
+  printf("%-16s %4d -> %d\n", name, offset, offset+sign*jmp);
+  return offset;
 }
 
 uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
@@ -62,10 +69,14 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   switch (inst) {
   case OpRet:
     return simple_inst("OpRet", offset);
+  case OpJmp:
+    return jmp_inst("OpJmp", 1, chunk, offset);
+  case OpJmpIfFalse:
+    return jmp_inst("OpJmpIfFalse", 1, chunk, offset);
   case OpConst:
     return constant_inst("OpConst", chunk, offset);
   case OpConstLong:
-    return constant_long_inst("OpConstLong", chunk, offset);
+    return constant_inst("OpConstLong", chunk, offset);
   case OpNull:
     return simple_inst("OpNull", offset);
   case OpTrue:

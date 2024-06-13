@@ -284,6 +284,7 @@ static void binary(bool can_assign);
 static void literal(bool can_assign);
 static void string(bool can_assign);
 static void variable(bool can_assign);
+static void and_(bool can_assign);
 
 static void declaration();
 static void block();
@@ -332,7 +333,7 @@ ParseRule rules[] = {
     [TokenIdentifier] = {variable, NULL, PrecNone},
     [TokenString] = {string, NULL, PrecNone},
     [TokenNumber] = {number, NULL, PrecNone},
-    [TokenAnd] = {NULL, NULL, PrecNone},
+    [TokenAnd] = {NULL, and_, PrecNone},
     [TokenClass] = {NULL, NULL, PrecNone},
     [TokenElse] = {NULL, NULL, PrecNone},
     [TokenFalse] = {literal, NULL, PrecNone},
@@ -447,6 +448,15 @@ static void unary(bool can_assign) {
   default:
     return;
   }
+}
+
+static void and_(bool can_assign) {
+  int32_t end_jmp = emit_jmp(OpJmpIfFalse);
+
+  emit_jmp(OpPop);
+  parse_precedence(PrecAnd);
+
+  patch_jmp(end_jmp);
 }
 
 static void binary(bool can_assign) {
@@ -572,23 +582,33 @@ static void expression_statement() {
 }
 
 static void block() {
+  begin_scope();
   while (!check(TokenRightBrace) && !check(TokenEof)) {
     declaration();
   }
-
   consume(TokenRightBrace, "Expect '}' after block.");
+  end_scope();
 }
 
 static void if_statement() {
   expression();
 
   uint32_t then_jmp = emit_jmp(OpJmpIfFalse);
-
+  emit_byte(OpPop);
   consume(TokenLeftBrace, "Expect '{' after 'if' statement.");
-  statement();
-  consume(TokenRightBrace, "Expect '}' after to close '{'.");
+  block();
+
+  uint32_t else_jmp = emit_jmp(OpJmp);
 
   patch_jmp(then_jmp);
+  emit_byte(OpPop);
+
+  if (match(TokenElse)) {
+    consume(TokenLeftBrace, "Expect '{' after 'else' statement.");
+    block();
+  }
+
+  patch_jmp(else_jmp);
 }
 
 static void statement() {
@@ -597,9 +617,7 @@ static void statement() {
   } else if (match(TokenIf)) {
     if_statement();
   } else if (match(TokenLeftBrace)) {
-    begin_scope();
     block();
-    end_scope();
   } else {
     expression_statement();
   }

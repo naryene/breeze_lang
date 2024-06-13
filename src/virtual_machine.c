@@ -281,11 +281,14 @@ static InterpretResult run() {
       if (check_result == InterpretRuntimeErr) {
         return check_result;
       }
-
       if (AS_BOOL(peek(0)) == false) {
         vm.inst_ptr += offset;
       }
-
+      break;
+    }
+    case OpJmp: {
+      uint16_t offset = READ_WORD();
+      vm.inst_ptr += offset;
       break;
     }
     case OpRet: {
