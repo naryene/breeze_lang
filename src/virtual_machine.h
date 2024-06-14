@@ -2,14 +2,22 @@
 #define breeze_virtual_machine_h
 
 #include "chunk.h"
+#include "object.h"
 #include "table.h"
 #include "value.h"
 
-#define STACK_MAX UINT16_MAX 
+#define FRAMES_MAX 64 
+#define STACK_MAX (FRAMES_MAX * (UINT8_MAX+1)) 
 
 typedef struct {
-  Chunk *chunk;
+  ObjFunction *function;
   uint8_t *inst_ptr;
+  Value *slots;
+} CallFrame;
+
+typedef struct {
+  CallFrame frames[FRAMES_MAX];
+  uint32_t frames_len;
   Value stack[STACK_MAX];
   Value *stack_ptr;
   Table globals;

@@ -4,8 +4,6 @@
 #include "virtual_machine.h"
 #include "memory.h"
 #include "object.h"
-#include "table.h"
-#include "value.h"
 
 
 static Obj* allocate_object(uint32_t size, ObjType type) {
@@ -69,8 +67,21 @@ ObjString* copy_string(const char* chars, uint32_t len){
   return allocate_string(heap_chars, len, hash);
 }
 
+void print_function(ObjFunction *function) {
+  if (function->name == NULL) {
+    printf("<script>");
+    return;
+  }
+  printf("<fn %s>", function->name->chars);
+
+}
+
 void print_object(Value value) {
   switch (OBJ_TYPE(value)) {
+    case ObjFunctionType: {
+      print_function(AS_FUNCTION(value));
+      break;
+    }
     case ObjStringType: {
       printf("%s", AS_CSTRING(value));
       break;

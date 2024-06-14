@@ -6,7 +6,6 @@
 #include "chunk.h"
 #include "common.h"
 #include "compiler.h"
-#include "object.h"
 #include "scanner.h"
 #include "value.h"
 
@@ -51,9 +50,13 @@ typedef struct {
   int32_t depth;
 } Local;
 
+typedef enum { TypeFunction, TypeScript } FunctionType;
+
 typedef struct {
+  ObjFunction *function;
+  FunctionType function_type;
   Local locals[UINT16_COUNT];
-  uint32_t local_count;
+  uint32_t locals_len;
   uint32_t scope_depth;
 } Compiler;
 
@@ -61,7 +64,7 @@ Parser parser;
 Compiler *current_compiler = NULL;
 Chunk *compiling_chunk;
 
-static Chunk *current_chunk() { return compiling_chunk; }
+static Chunk *current_chunk() { return &current_compiler->function->chunk; }
 
 static void error_at(const Token *token, const char *message) {
   if (parser.panic_mode == true) {
@@ -193,22 +196,6 @@ static void patch_jmp(int32_t offset) {
   current_chunk()->code[offset + 1] = (jmp >> 8) & 0xff;
 }
 
-static void init_compiler(Compiler *compiler) {
-  compiler->local_count = 0;
-  compiler->scope_depth = 0;
-  current_compiler = compiler;
-}
-
-static void end_compiler() {
-  emit_return();
-
-#ifdef DEBUG_PRINT_CODE
-  if (parser.had_error == false) {
-    disassemble_chunk(current_chunk(), "code");
-  }
-#endif /* ifdef DEBUG_PRINT_CODE */
-}
-
 static bool same_name(const Token *name, const Token *other) {
   if (name->len != other->len) {
     return false;
@@ -217,7 +204,7 @@ static bool same_name(const Token *name, const Token *other) {
 }
 
 static int32_t resolve_local(Compiler *compiler, const Token *name) {
-  for (int32_t i = compiler->local_count - 1; i >= 0; i -= 1) {
+  for (int32_t i = compiler->locals_len - 1; i >= 0; i -= 1) {
     Local *local = &compiler->locals[i];
     if (same_name(name, &local->name)) {
       if (local->depth == -1) {
@@ -233,12 +220,12 @@ static void add_local(const Token *name) {
   // My version is able to contain more local
   // variables, but i'm trying to do same as clox
   // for now
-  if (current_compiler->local_count == UINT16_COUNT) {
+  if (current_compiler->locals_len == UINT16_COUNT) {
     error("Too many local variabls in function.");
     return;
   }
-  Local *local = &current_compiler->locals[current_compiler->local_count];
-  current_compiler->local_count += 1;
+  Local *local = &current_compiler->locals[current_compiler->locals_len];
+  current_compiler->locals_len += 1;
   local->name = *name;
   local->depth = -1;
 }
@@ -249,7 +236,7 @@ static void declare_variable() {
   }
 
   Token *name = &parser.previous;
-  for (int32_t i = current_compiler->local_count - 1; i >= 0; i -= 1) {
+  for (int32_t i = current_compiler->locals_len - 1; i >= 0; i -= 1) {
     Local *local = &current_compiler->locals[i];
     if (local->depth != -1 && local->depth < current_compiler->scope_depth) {
       break;
@@ -298,11 +285,11 @@ static void begin_scope() { current_compiler->scope_depth += 1; }
 
 static void end_scope() {
   current_compiler->scope_depth -= 1;
-  while (current_compiler->local_count > 0 &&
-         current_compiler->locals[current_compiler->local_count - 1].depth >
+  while (current_compiler->locals_len > 0 &&
+         current_compiler->locals[current_compiler->locals_len - 1].depth >
              current_compiler->scope_depth) {
     emit_byte(OpPop);
-    current_compiler->local_count -= 1;
+    current_compiler->locals_len -= 1;
   }
 }
 
@@ -312,11 +299,39 @@ static void scoped_block() {
   end_scope();
 }
 
-bool compile(const char *source, Chunk *chunk) {
+static void init_compiler(Compiler *compiler, FunctionType function_type) {
+  compiler->function = NULL;
+  compiler->function_type = function_type;
+  compiler->locals_len = 0;
+  compiler->scope_depth = 0;
+  compiler->function = new_function();
+  current_compiler = compiler;
+
+  Local *local = &current_compiler->locals[current_compiler->locals_len];
+  current_compiler->locals_len += 1;
+  local->depth = 0;
+  local->name.start = "";
+  local->name.len = 0;
+}
+
+static ObjFunction *end_compiler() {
+  emit_return();
+  ObjFunction *function = current_compiler->function;
+
+#ifdef DEBUG_PRINT_CODE
+  if (parser.had_error == false) {
+    disassemble_chunk(current_chunk(),
+                      function->name != NULL ? function->name->chars : "code");
+  }
+#endif /* ifdef DEBUG_PRINT_CODE */
+
+  return function;
+}
+
+ObjFunction *compile(const char *source) {
   init_scanner(source);
   Compiler compiler;
-  init_compiler(&compiler);
-  compiling_chunk = chunk;
+  init_compiler(&compiler, TypeScript);
 
   parser.had_error = false;
   parser.panic_mode = false;
@@ -325,8 +340,11 @@ bool compile(const char *source, Chunk *chunk) {
   while (!match(TokenEof)) {
     declaration();
   }
-  end_compiler();
-  return !parser.had_error;
+  if (parser.had_error) {
+    return NULL;
+  }
+  ObjFunction * function = end_compiler();
+  return function;
 }
 
 ParseRule rules[] = {
@@ -397,7 +415,7 @@ static void parse_precedence(Precedence precedence) {
 }
 
 static void init_variable() {
-  current_compiler->locals[current_compiler->local_count - 1].depth =
+  current_compiler->locals[current_compiler->locals_len - 1].depth =
       current_compiler->scope_depth;
 }
 
@@ -689,11 +707,11 @@ static void for_statement() {
   block();
   emit_loop(loop_start);
 
-  if(exit_jmp != -1) {
+  if (exit_jmp != -1) {
     patch_jmp(exit_jmp);
     emit_byte(OpPop);
   }
-  
+
   end_scope();
 }
 

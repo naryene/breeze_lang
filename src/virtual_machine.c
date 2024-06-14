@@ -19,7 +19,10 @@
 
 VirtualMachine vm;
 
-static void reset_stack() { vm.stack_ptr = vm.stack; }
+static void reset_stack() {
+  vm.stack_ptr = vm.stack;
+  vm.frames_len = 0;
+}
 
 static void runtime_error(const char *format, ...) {
   va_list args;
@@ -28,8 +31,9 @@ static void runtime_error(const char *format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  size_t inst = vm.inst_ptr - vm.chunk->code - 1;
-  uint32_t line = get_line(vm.chunk->lines, inst);
+  CallFrame *frame = &vm.frames[vm.frames_len - 1];
+  size_t inst = frame->inst_ptr - frame->function->chunk.code - 1;
+  uint32_t line = get_line(frame->function->chunk.lines, inst);
   fprintf(stderr, "[line %d] in script\n", line);
   reset_stack();
 }
@@ -92,18 +96,20 @@ static void concat() {
 
 static InterpretResult run() {
   /*** MACROS DEFINITION ***/
+  CallFrame *frame = &vm.frames[vm.frames_len - 1];
 
-#define READ_BYTE() (vm.inst_ptr += 1, *(vm.inst_ptr - 1))
+#define READ_BYTE() (frame->inst_ptr += 1, *(frame->inst_ptr - 1))
 
 #define READ_WORD()                                                            \
-  (vm.inst_ptr += 2, (uint16_t)(vm.inst_ptr[-2] | (vm.inst_ptr[-1] << 8)))
+  (frame->inst_ptr += 2,                                                       \
+   (uint16_t)(frame->inst_ptr[-2] | (frame->inst_ptr[-1] << 8)))
 
-#define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 
 #define READ_CONSTANT_LONG()                                                   \
   ({                                                                           \
     uint32_t idx = (READ_BYTE()) | (READ_BYTE() << 8) | (READ_BYTE() << 16);   \
-    vm.chunk->constants.values[idx];                                           \
+    frame->function->chunk.constants.values[idx];                              \
   })
 
 #define READ_IDX()                                                             \
@@ -122,7 +128,7 @@ static InterpretResult run() {
 #define READ_STRING()                                                          \
   ({                                                                           \
     uint32_t idx = READ_IDX();                                                 \
-    Value constant = vm.chunk->constants.values[idx];                          \
+    Value constant = frame->function->chunk.constants.values[idx];             \
     AS_STRING(constant);                                                       \
   })
 
@@ -148,7 +154,8 @@ static InterpretResult run() {
       printf(" ]");
     }
     printf("\n");
-    disassemble_inst(vm.chunk, (uint32_t)(vm.inst_ptr - vm.chunk->code));
+    disassemble_inst(&frame->function->chunk,
+                     (uint32_t)(frame->inst_ptr - frame->function->chunk.code));
 #endif /* ifdef DEBUG_TRACE_EXECUTION                                          \
         */
     uint8_t inst;
@@ -202,12 +209,12 @@ static InterpretResult run() {
     }
     case OpGetLocal: {
       uint32_t local_stack_idx = READ_IDX();
-      push_stack(vm.stack[local_stack_idx]);
+      push_stack(frame->slots[local_stack_idx]);
       break;
     }
     case OpSetLocal: {
       uint32_t local_stack_idx = READ_IDX();
-      vm.stack[local_stack_idx] = peek(0);
+      frame->slots[local_stack_idx] = peek(0);
       break;
     }
     case OpEq: {
@@ -282,13 +289,13 @@ static InterpretResult run() {
         return check_result;
       }
       if (AS_BOOL(peek(0)) == false) {
-        vm.inst_ptr = vm.chunk->code + offset;
+        frame->inst_ptr = frame->function->chunk.code + offset;
       }
       break;
     }
     case OpJmp: {
       uint16_t offset = READ_WORD();
-        vm.inst_ptr = vm.chunk->code + offset;
+      frame->inst_ptr = frame->function->chunk.code + offset;
       break;
     }
     case OpRet: {
@@ -306,17 +313,17 @@ static InterpretResult run() {
 }
 
 InterpretResult interpret(const char *source) {
-  Chunk chunk;
-  init_chunk(&chunk);
-  if (!compile(source, &chunk)) {
-    free_chunk(&chunk);
+  ObjFunction *function = compile(source);
+  if (function == NULL) {
     return InterpretCompileErr;
   }
-  vm.chunk = &chunk;
-  vm.inst_ptr = vm.chunk->code;
 
-  InterpretResult result = run();
+  push_stack(OBJ_VAL(function));
+  CallFrame *frame = &vm.frames[vm.frames_len];
+  vm.frames_len += 1;
+  frame->function = function;
+  frame->inst_ptr = function->chunk.code;
+  frame->slots = vm.stack;
 
-  free_chunk(&chunk);
-  return InterpretOk;
+  return run();
 }
