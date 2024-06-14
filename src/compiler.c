@@ -185,8 +185,8 @@ static void emit_loop(uint32_t loop_start) {
 }
 
 static void patch_jmp(int32_t offset) {
-  int32_t jmp = current_chunk()->len ;
-  if ((jmp-offset-2) > UINT16_MAX) {
+  int32_t jmp = current_chunk()->len;
+  if ((jmp - offset - 2) > UINT16_MAX) {
     error("Too much code to jump over.");
   }
   current_chunk()->code[offset] = (jmp)&0xff;
@@ -207,18 +207,6 @@ static void end_compiler() {
     disassemble_chunk(current_chunk(), "code");
   }
 #endif /* ifdef DEBUG_PRINT_CODE */
-}
-
-static void begin_scope() { current_compiler->scope_depth += 1; }
-
-static void end_scope() {
-  current_compiler->scope_depth -= 1;
-  while (current_compiler->local_count > 0 &&
-         current_compiler->locals[current_compiler->local_count - 1].depth >
-             current_compiler->scope_depth) {
-    emit_byte(OpPop);
-    current_compiler->local_count -= 1;
-  }
 }
 
 static bool same_name(const Token *name, const Token *other) {
@@ -302,8 +290,27 @@ static void statement();
 static void print_statement();
 static void if_statement();
 static void while_statement();
+static void for_statement();
 
 static ParseRule *get_rule(TokenType type);
+
+static void begin_scope() { current_compiler->scope_depth += 1; }
+
+static void end_scope() {
+  current_compiler->scope_depth -= 1;
+  while (current_compiler->local_count > 0 &&
+         current_compiler->locals[current_compiler->local_count - 1].depth >
+             current_compiler->scope_depth) {
+    emit_byte(OpPop);
+    current_compiler->local_count -= 1;
+  }
+}
+
+static void scoped_block() {
+  begin_scope();
+  block();
+  end_scope();
+}
 
 bool compile(const char *source, Chunk *chunk) {
   init_scanner(source);
@@ -605,12 +612,10 @@ static void expression_statement() {
 }
 
 static void block() {
-  begin_scope();
   while (!check(TokenRightBrace) && !check(TokenEof)) {
     declaration();
   }
   consume(TokenRightBrace, "Expect '}' after block.");
-  end_scope();
 }
 
 static void if_statement() {
@@ -619,7 +624,7 @@ static void if_statement() {
   uint32_t then_jmp = emit_jmp(OpJmpIfFalse);
   emit_byte(OpPop);
   consume(TokenLeftBrace, "Expect '{' after 'if' statement.");
-  block();
+  scoped_block();
 
   uint32_t else_jmp = emit_jmp(OpJmp);
 
@@ -628,7 +633,7 @@ static void if_statement() {
 
   if (match(TokenElse)) {
     consume(TokenLeftBrace, "Expect '{' after 'else' statement.");
-    block();
+    scoped_block();
   }
 
   patch_jmp(else_jmp);
@@ -641,11 +646,56 @@ static void while_statement() {
   uint32_t exit_jmp = emit_jmp(OpJmpIfFalse);
   emit_byte(OpPop);
   consume(TokenLeftBrace, "Expect '{' after 'while' statement.");
-  block();
+  scoped_block();
   emit_loop(loop_start);
 
   patch_jmp(exit_jmp);
   emit_byte(OpPop);
+}
+
+static void for_statement() {
+  begin_scope();
+  consume(TokenLeftParen, "Expect '(' after 'for'.");
+  if (match(TokenSemiColon)) {
+
+  } else if (match(TokenLet)) {
+    var_declaration();
+  } else {
+    expression_statement();
+  }
+
+  uint32_t loop_start = current_chunk()->len;
+  int32_t exit_jmp = -1;
+  if (!match(TokenSemiColon)) {
+    expression();
+    consume(TokenSemiColon, "Expect ';' after loop condition.");
+
+    exit_jmp = emit_jmp(OpJmpIfFalse);
+    emit_byte(OpPop);
+  }
+
+  if (!match(TokenRightParen)) {
+    uint32_t body_jmp = emit_jmp(OpJmp);
+    uint32_t increment_start = current_chunk()->len;
+    expression();
+    emit_byte(OpPop);
+    consume(TokenRightParen, "Expect ')' after 'for' clauses.");
+
+    emit_loop(loop_start);
+    loop_start = increment_start;
+    patch_jmp(body_jmp);
+  }
+
+  consume(TokenLeftBrace, "Expect '{' after 'for' statement.");
+  block();
+  emit_loop(loop_start);
+
+  if(exit_jmp != -1) {
+    patch_jmp(exit_jmp);
+    emit_byte(OpPop);
+  }
+  
+  end_scope();
 }
 
 static void statement() {
@@ -655,8 +705,10 @@ static void statement() {
     if_statement();
   } else if (match(TokenWhile)) {
     while_statement();
+  } else if (match(TokenFor)) {
+    for_statement();
   } else if (match(TokenLeftBrace)) {
-    block();
+    scoped_block();
   } else {
     expression_statement();
   }
