@@ -1,4 +1,3 @@
-
 #include "scanner.h"
 #include "common.h"
 

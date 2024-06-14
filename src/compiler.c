@@ -26,11 +26,11 @@ typedef struct {
 typedef enum {
   PrecNone,
   PrecAssignment, // =
-  PrecOrOr,         // || 
-  PrecAndAnd,        // &&
+  PrecOrOr,       // ||
+  PrecAndAnd,     // &&
   PrecEquality,   // == !=
   PrecComparison, // < > <= >=
-  PrecTerm,       // + - 
+  PrecTerm,       // + -
   PrecFactor,     // * /
   PrecUnary,      // ! -
   PrecCall,       // . (
@@ -175,9 +175,18 @@ static uint32_t emit_jmp(uint8_t inst) {
   return current_chunk()->len - 2;
 }
 
+static void emit_loop(uint32_t loop_start) {
+  emit_byte(OpJmp);
+  uint32_t offset = current_chunk()->len - loop_start + 2;
+  if (offset > UINT16_MAX) {
+    error("Loop body is too large.");
+  }
+  emit_word(loop_start & 0xff, (loop_start >> 8) & 0xff);
+}
+
 static void patch_jmp(int32_t offset) {
-  int32_t jmp = current_chunk()->len - offset - 2;
-  if (jmp > UINT16_MAX) {
+  int32_t jmp = current_chunk()->len ;
+  if ((jmp-offset-2) > UINT16_MAX) {
     error("Too much code to jump over.");
   }
   current_chunk()->code[offset] = (jmp)&0xff;
@@ -291,6 +300,8 @@ static void declaration();
 static void block();
 static void statement();
 static void print_statement();
+static void if_statement();
+static void while_statement();
 
 static ParseRule *get_rule(TokenType type);
 
@@ -623,11 +634,27 @@ static void if_statement() {
   patch_jmp(else_jmp);
 }
 
+static void while_statement() {
+  uint32_t loop_start = current_chunk()->len;
+  expression();
+
+  uint32_t exit_jmp = emit_jmp(OpJmpIfFalse);
+  emit_byte(OpPop);
+  consume(TokenLeftBrace, "Expect '{' after 'while' statement.");
+  block();
+  emit_loop(loop_start);
+
+  patch_jmp(exit_jmp);
+  emit_byte(OpPop);
+}
+
 static void statement() {
   if (match(TokenPrint)) {
     print_statement();
   } else if (match(TokenIf)) {
     if_statement();
+  } else if (match(TokenWhile)) {
+    while_statement();
   } else if (match(TokenLeftBrace)) {
     block();
   } else {

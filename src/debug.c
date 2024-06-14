@@ -46,12 +46,12 @@ static uint32_t special_inst(const char *name, const Chunk *chunk,
   return offset;
 }
 
-static uint32_t jmp_inst(const char *name, int8_t sign, Chunk *chunk,
+static uint32_t jmp_inst(const char *name, int8_t sign,const Chunk *chunk,
                          uint32_t offset) {
   uint16_t jmp = (uint16_t) chunk->code[offset+1];
   jmp |= chunk->code[offset+2] << 8;
   offset +=3;
-  printf("%-16s %4d -> %d\n", name, offset, offset+sign*jmp);
+  printf("%-16s %4d -> %d\n", name, offset, jmp);
   return offset;
 }
 

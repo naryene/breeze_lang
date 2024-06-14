@@ -282,13 +282,13 @@ static InterpretResult run() {
         return check_result;
       }
       if (AS_BOOL(peek(0)) == false) {
-        vm.inst_ptr += offset;
+        vm.inst_ptr = vm.chunk->code + offset;
       }
       break;
     }
     case OpJmp: {
       uint16_t offset = READ_WORD();
-      vm.inst_ptr += offset;
+        vm.inst_ptr = vm.chunk->code + offset;
       break;
     }
     case OpRet: {

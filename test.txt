@@ -1,4 +1,8 @@
-let x = 12;
-if (x > 10 && x==x) {
- print "hi";
+let x = 0;
+let result = 0;
+while (x<10) {
+  result = result +x;
+  x = x+1;
 }
+
+print result;
