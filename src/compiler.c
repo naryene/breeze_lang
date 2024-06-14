@@ -657,7 +657,6 @@ static void for_statement() {
   begin_scope();
   consume(TokenLeftParen, "Expect '(' after 'for'.");
   if (match(TokenSemiColon)) {
-
   } else if (match(TokenLet)) {
     var_declaration();
   } else {

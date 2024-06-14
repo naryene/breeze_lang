@@ -17,6 +17,14 @@ static Obj* allocate_object(uint32_t size, ObjType type) {
   return object;
 }
 
+ObjFunction *new_function() {
+  ObjFunction *function = ALLOCATE_OBJ(ObjFunction, ObjFunctionType);
+  function->arity = 0;
+  function->name = NULL;
+  init_chunk(&function->chunk);
+  return function;
+}
+
 static ObjString* allocate_string(const char* chars, uint32_t len, uint32_t hash) {
   ObjString* string = ALLOCATE_OBJ(ObjString, ObjStringType);
   string->len = len;
