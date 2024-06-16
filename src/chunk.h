@@ -29,6 +29,7 @@ typedef enum {
   OpGetLocal,
   OpJmpIfFalse,
   OpJmp,
+  OpCall,
 } OpCode;
 
 /***
@@ -50,6 +51,8 @@ typedef struct {
   LineVec lines;
   ValueVec constants;
 } Chunk;
+
+
 
 uint32_t get_line(LineVec lines, uint32_t offset);
 

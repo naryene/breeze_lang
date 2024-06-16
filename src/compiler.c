@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,6 +7,7 @@
 #include "chunk.h"
 #include "common.h"
 #include "compiler.h"
+#include "object.h"
 #include "scanner.h"
 #include "value.h"
 
@@ -52,7 +54,8 @@ typedef struct {
 
 typedef enum { TypeFunction, TypeScript } FunctionType;
 
-typedef struct {
+typedef struct Compiler {
+  struct Compiler *enclosing;
   ObjFunction *function;
   FunctionType function_type;
   Local locals[UINT16_COUNT];
@@ -62,7 +65,6 @@ typedef struct {
 
 Parser parser;
 Compiler *current_compiler = NULL;
-Chunk *compiling_chunk;
 
 static Chunk *current_chunk() { return &current_compiler->function->chunk; }
 
@@ -85,9 +87,21 @@ static void error_at(const Token *token, const char *message) {
   parser.had_error = true;
 }
 
-static void error(const char *message) { error_at(&parser.previous, message); }
+static void error(const char *format, ...) {
+  char message[256]; // Adjust size as necessary
+  va_list args;
+  va_start(args, format);
+  vsnprintf(message, sizeof(message), format, args);
+  va_end(args);
+  error_at(&parser.previous, message);
+}
 
-static void error_at_current(const char *message) {
+static void error_at_current(const char *format, ...) {
+  char message[256]; // Adjust size as necessary
+  va_list args;
+  va_start(args, format);
+  vsnprintf(message, sizeof(message), format, args);
+  va_end(args);
   error_at(&parser.current, message);
 }
 
@@ -168,6 +182,12 @@ static void emit_constant_idx(const uint32_t idx) {
 }
 
 static uint32_t emit_name(const Token *name) {
+  // for (uint32_t idx = 0; idx<current_chunk()->constants.len; idx+=1){
+  //   Value *value = &current_chunk()->constants.values[idx];
+  //   if (IS_STRING(*value) && AS_STRING(*value)->len == name->len && memcmp(name->start, AS_STRING(*value)->chars, name->len) == 0) {
+  //     return idx;
+  //   }
+  // }
   ObjString *string = copy_string(name->start, name->len);
   return emit_constant_(OBJ_VAL(string));
 }
@@ -196,6 +216,32 @@ static void patch_jmp(int32_t offset) {
   current_chunk()->code[offset + 1] = (jmp >> 8) & 0xff;
 }
 
+static void parse_precedence(Precedence precedence);
+static void expression();
+
+static void grouping(bool can_assign);
+static void number(bool can_assign);
+static void unary(bool can_assign);
+static void binary(bool can_assign);
+static void call(bool can_assign);
+static void literal(bool can_assign);
+static void string(bool can_assign);
+static void variable(bool can_assign);
+static void and_and_(bool can_assign);
+static void or_or_(bool can_assign);
+
+static void var_declaration();
+static void fn_declaration();
+static void declaration();
+static void block();
+static void statement();
+static void print_statement();
+static void if_statement();
+static void while_statement();
+static void for_statement();
+
+static ParseRule *get_rule(TokenType type);
+
 static bool same_name(const Token *name, const Token *other) {
   if (name->len != other->len) {
     return false;
@@ -214,6 +260,27 @@ static int32_t resolve_local(Compiler *compiler, const Token *name) {
     }
   }
   return -1;
+}
+
+static void named_variable(const Token *name, bool can_assign) {
+  uint8_t get_op, set_op;
+  int32_t arg = resolve_local(current_compiler, name);
+  if (arg != -1) {
+    get_op = OpGetLocal;
+    set_op = OpSetLocal;
+  } else {
+    arg = emit_name(name);
+    get_op = OpGetGlobal;
+    set_op = OpSetGlobal;
+  }
+
+  if (can_assign && match(TokenEqual)) {
+    expression();
+    emit_byte(set_op);
+  } else {
+    emit_byte(get_op);
+  }
+  emit_constant_idx(arg);
 }
 
 static void add_local(const Token *name) {
@@ -258,28 +325,40 @@ static uint32_t parse_variable(const char *message) {
   return emit_name(&parser.previous);
 }
 
-static void parse_precedence(Precedence precedence);
-static void expression();
+static void init_variable() {
+  if (current_compiler->scope_depth == 0) {
+    return;
+  }
+  current_compiler->locals[current_compiler->locals_len - 1].depth =
+      current_compiler->scope_depth;
+}
 
-static void grouping(bool can_assign);
-static void number(bool can_assign);
-static void unary(bool can_assign);
-static void binary(bool can_assign);
-static void literal(bool can_assign);
-static void string(bool can_assign);
-static void variable(bool can_assign);
-static void and_and_(bool can_assign);
-static void or_or_(bool can_assign);
+static void define_variable(uint32_t variable) {
+  if (current_compiler->scope_depth > 0) {
+    init_variable();
+    return;
+  }
+  emit_byte(OpDefineGlobal);
+  emit_constant_idx(variable);
+}
 
-static void declaration();
-static void block();
-static void statement();
-static void print_statement();
-static void if_statement();
-static void while_statement();
-static void for_statement();
-
-static ParseRule *get_rule(TokenType type);
+static uint8_t argument_list() {
+  uint8_t args_len = 0;
+  if (!check(TokenRightParen)) {
+    while (true) {
+      expression();
+      if (args_len == UINT8_MAX) {
+        error("Can't have more than %d arguments.", UINT8_MAX);
+      }
+      args_len+=1;
+      if (!match(TokenComma)) {
+        break;
+      }
+    }
+  }
+  consume(TokenRightParen, "Expect ')' after arguments.");
+  return args_len;
+}
 
 static void begin_scope() { current_compiler->scope_depth += 1; }
 
@@ -300,12 +379,17 @@ static void scoped_block() {
 }
 
 static void init_compiler(Compiler *compiler, FunctionType function_type) {
+  compiler->enclosing = current_compiler;
   compiler->function = NULL;
   compiler->function_type = function_type;
   compiler->locals_len = 0;
   compiler->scope_depth = 0;
   compiler->function = new_function();
   current_compiler = compiler;
+  if (function_type != TypeScript) {
+    current_compiler->function->name =
+        copy_string(parser.previous.start, parser.previous.len);
+  }
 
   Local *local = &current_compiler->locals[current_compiler->locals_len];
   current_compiler->locals_len += 1;
@@ -325,7 +409,34 @@ static ObjFunction *end_compiler() {
   }
 #endif /* ifdef DEBUG_PRINT_CODE */
 
+  current_compiler = current_compiler->enclosing;
   return function;
+}
+
+static void function(FunctionType function_type) {
+  Compiler compiler;
+  init_compiler(&compiler, function_type);
+  begin_scope();
+  consume(TokenLeftParen, "Expect '(' after function name.");
+  if (!check(TokenRightParen)) {
+    while (true) {
+      current_compiler->function->arity += 1;
+      if (current_compiler->function->arity > UINT8_MAX) {
+        error_at_current("Can't have more than %d parameters.", UINT8_MAX);
+      }
+      uint32_t constant = parse_variable("Expect parameter name.");
+      define_variable(constant);
+      if (!match(TokenComma)) {
+        break;
+      }
+    }
+  }
+  consume(TokenRightParen, "Expect ')' after parameters.");
+  consume(TokenLeftBrace, "Expect '{' before function body.");
+  block();
+
+  ObjFunction *function = end_compiler();
+  emit_constant(OBJ_VAL(function));
 }
 
 ObjFunction *compile(const char *source) {
@@ -343,12 +454,12 @@ ObjFunction *compile(const char *source) {
   if (parser.had_error) {
     return NULL;
   }
-  ObjFunction * function = end_compiler();
+  ObjFunction *function = end_compiler();
   return function;
 }
 
 ParseRule rules[] = {
-    [TokenLeftParen] = {grouping, NULL, PrecNone},
+    [TokenLeftParen] = {grouping, call, PrecCall},
     [TokenRightParen] = {NULL, NULL, PrecNone},
     [TokenLeftBrace] = {NULL, NULL, PrecNone},
     [TokenRightBrace] = {NULL, NULL, PrecNone},
@@ -414,20 +525,6 @@ static void parse_precedence(Precedence precedence) {
   }
 }
 
-static void init_variable() {
-  current_compiler->locals[current_compiler->locals_len - 1].depth =
-      current_compiler->scope_depth;
-}
-
-static void define_variable(uint32_t global) {
-  if (current_compiler->scope_depth > 0) {
-    init_variable();
-    return;
-  }
-  emit_byte(OpDefineGlobal);
-  emit_constant_idx(global);
-}
-
 static void grouping(bool can_assign) {
   expression();
   consume(TokenRightParen, "Expect ')' after expression.");
@@ -441,27 +538,6 @@ static void number(bool can_assign) {
 static void string(bool can_assign) {
   emit_constant(
       OBJ_VAL(copy_string(parser.previous.start + 1, parser.previous.len - 2)));
-}
-
-static void named_variable(const Token *name, bool can_assign) {
-  uint8_t get_op, set_op;
-  int32_t arg = resolve_local(current_compiler, name);
-  if (arg != -1) {
-    get_op = OpGetLocal;
-    set_op = OpSetLocal;
-  } else {
-    arg = emit_name(name);
-    get_op = OpGetGlobal;
-    set_op = OpSetGlobal;
-  }
-
-  if (can_assign && match(TokenEqual)) {
-    expression();
-    emit_byte(set_op);
-  } else {
-    emit_byte(get_op);
-  }
-  emit_constant_idx(arg);
 }
 
 static void variable(bool can_assign) {
@@ -558,6 +634,11 @@ static void binary(bool can_assign) {
   }
 }
 
+static void call(bool can_assign) {
+  uint8_t args_len = argument_list();
+  emit_word(OpCall, args_len);
+}
+
 static void literal(bool can_assign) {
   switch (parser.previous.type) {
   case TokenNull: {
@@ -603,20 +684,6 @@ static void synchronize() {
 
 static void expression() { parse_precedence(PrecAssignment); }
 
-static void var_declaration() {
-  uint32_t variable = parse_variable("Expect variable name.");
-
-  if (match(TokenEqual)) {
-    expression();
-  } else {
-    emit_byte(OpNull);
-  }
-
-  consume(TokenSemiColon, "Expect ';' after variable declaration.");
-
-  define_variable(variable);
-}
-
 static void print_statement() {
   expression();
   consume(TokenSemiColon, "Expect ';' after value.");
@@ -627,13 +694,6 @@ static void expression_statement() {
   expression();
   consume(TokenSemiColon, "Expect ';' after value.");
   emit_byte(OpPop);
-}
-
-static void block() {
-  while (!check(TokenRightBrace) && !check(TokenEof)) {
-    declaration();
-  }
-  consume(TokenRightBrace, "Expect '}' after block.");
 }
 
 static void if_statement() {
@@ -731,8 +791,38 @@ static void statement() {
   }
 }
 
+static void block() {
+  while (!check(TokenRightBrace) && !check(TokenEof)) {
+    declaration();
+  }
+  consume(TokenRightBrace, "Expect '}' after block.");
+}
+
+static void fn_declaration() {
+  uint8_t variable = parse_variable("Expect function name.");
+  init_variable();
+  function(TypeFunction);
+  define_variable(variable);
+}
+
+static void var_declaration() {
+  uint32_t variable = parse_variable("Expect variable name.");
+
+  if (match(TokenEqual)) {
+    expression();
+  } else {
+    emit_byte(OpNull);
+  }
+
+  consume(TokenSemiColon, "Expect ';' after variable declaration.");
+
+  define_variable(variable);
+}
+
 static void declaration() {
-  if (match(TokenLet)) {
+  if (match(TokenFn)) {
+    fn_declaration();
+  } else if (match(TokenLet)) {
     var_declaration();
   } else {
     statement();

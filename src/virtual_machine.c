@@ -31,10 +31,19 @@ static void runtime_error(const char *format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  CallFrame *frame = &vm.frames[vm.frames_len - 1];
-  size_t inst = frame->inst_ptr - frame->function->chunk.code - 1;
-  uint32_t line = get_line(frame->function->chunk.lines, inst);
-  fprintf(stderr, "[line %d] in script\n", line);
+  for (int32_t i = vm.frames_len - 1; i >= 0; i -= 1) {
+    CallFrame *frame = &vm.frames[i];
+    ObjFunction *function = frame->function;
+    size_t inst = frame->inst_ptr - function->chunk.code - 1;
+    fprintf(stderr, "[line %d] in ", get_line(function->chunk.lines, inst));
+
+    if (function->name == NULL) {
+      fprintf(stderr, "script\n");
+    } else {
+      fprintf(stderr, "%s()\n", function->name->chars);
+    }
+  }
+
   reset_stack();
 }
 
@@ -58,7 +67,7 @@ void push_stack(Value value) {
     vm.stack_ptr += 1;
     return;
   }
-  runtime_error("Error: STACK OVERFLOW");
+  runtime_error("Stack overflow.");
   exit(1);
 }
 
@@ -70,6 +79,38 @@ Value pop_stack() {
 // Peeks at a `Value` in the VM stack.
 static Value peek(uint32_t distance) {
   return vm.stack_ptr[(int32_t)(-1 - distance)];
+}
+
+static bool call(ObjFunction *function, uint8_t args_len) {
+  if (args_len != function->arity) {
+    runtime_error("Expected %d arguments but got %d.", function->arity,
+                  args_len);
+    return false;
+  }
+
+  if (vm.frames_len == FRAMES_MAX) {
+    runtime_error("Stack overflow.");
+    return false;
+  }
+  CallFrame *frame = &vm.frames[vm.frames_len];
+  vm.frames_len += 1;
+  frame->function = function;
+  frame->inst_ptr = function->chunk.code;
+  frame->frame_ptr = vm.stack_ptr - args_len - 1;
+  return true;
+}
+
+static bool call_value(Value callee, uint8_t args_len) {
+  if (IS_OBJ(callee)) {
+    switch (OBJ_TYPE(callee)) {
+    case ObjFunctionType:
+      return call(AS_FUNCTION(callee), args_len);
+    default:
+      break;
+    }
+  }
+  runtime_error("Can only call functions and classes.");
+  return false;
 }
 
 static InterpretResult check_bool(Value value) {
@@ -209,12 +250,12 @@ static InterpretResult run() {
     }
     case OpGetLocal: {
       uint32_t local_stack_idx = READ_IDX();
-      push_stack(frame->slots[local_stack_idx]);
+      push_stack(frame->frame_ptr[local_stack_idx]);
       break;
     }
     case OpSetLocal: {
       uint32_t local_stack_idx = READ_IDX();
-      frame->slots[local_stack_idx] = peek(0);
+      frame->frame_ptr[local_stack_idx] = peek(0);
       break;
     }
     case OpEq: {
@@ -298,6 +339,14 @@ static InterpretResult run() {
       frame->inst_ptr = frame->function->chunk.code + offset;
       break;
     }
+    case OpCall: {
+      uint8_t args_len = READ_BYTE();
+      if (!call_value(peek(args_len), args_len)) {
+        return InterpretRuntimeErr;
+      }
+      frame = &vm.frames[vm.frames_len - 1];
+      break;
+    }
     case OpRet: {
       return InterpretOk;
     }
@@ -312,18 +361,25 @@ static InterpretResult run() {
 #undef BINARY_OP
 }
 
+// void print_constants(const Chunk *chunk) {
+//   printf("Constants:\n");
+//   for (int i = 0; i < chunk->constants.len; i++) {
+//     printf("%d: ", i);
+//     print_value(chunk->constants.values[i]);
+//     printf("\n");
+//   }
+// }
+
 InterpretResult interpret(const char *source) {
   ObjFunction *function = compile(source);
   if (function == NULL) {
     return InterpretCompileErr;
   }
 
+  // print_constants(&function->chunk);
+
   push_stack(OBJ_VAL(function));
-  CallFrame *frame = &vm.frames[vm.frames_len];
-  vm.frames_len += 1;
-  frame->function = function;
-  frame->inst_ptr = function->chunk.code;
-  frame->slots = vm.stack;
+  call(function, 0);
 
   return run();
 }

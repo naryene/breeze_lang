@@ -32,33 +32,26 @@ static void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset) {
     line_vec->len += 1;
   }
 }
-
-uint32_t get_line(LineVec line_vec, uint32_t offset) {
+uint32_t get_line(LineVec line_vec, uint32_t inst) {
   int32_t start = 0;
   int32_t end = line_vec.len - 1;
   while (true) {
     int32_t mid = (start + end) / 2;
-
-    // printf("\nmid midmd %d  offset: %u\n", mid, offset);
-
+    Line *line = &line_vec.lines[mid];
 
     if (start >= end) {
-      // printf("\nline: %u\n", line_vec.lines[mid][1]);
-      return line_vec.lines[mid][0];
+      return line_vec.lines[start][0];
     }
 
-    if (offset > line_vec.lines[mid][1]) {
-      start = mid + 1;
-      continue;
-    } 
-    if (offset < line_vec.lines[mid][1]){
+    if (inst < (*line)[1]) {
       end = mid - 1;
-      continue;
+    } else if (inst < line_vec.lines[mid + 1][1]) {
+      return line_vec.lines[mid + 1][0];
+    } else {
+      start = mid + 1;
     }
-    return line_vec.lines[mid][0];
   }
 }
-
 void init_chunk(Chunk *chunk) {
   chunk->len = 0;
   chunk->capacity = 0;
@@ -87,7 +80,6 @@ void write_chunk(Chunk *chunk, uint8_t byte, uint32_t line) {
   chunk->len += 1;
 }
 
-
 uint32_t add_constant(Chunk *chunk, Value value) {
   write_value_vec(&chunk->constants, value);
   return chunk->constants.len - 1;
@@ -104,7 +96,7 @@ uint32_t push_constant(Chunk *chunk, Value value, uint32_t line) {
     write_chunk(chunk, OpConst, line);
     write_chunk(chunk, (uint8_t)idx, line);
     return idx;
-  } 
+  }
   write_chunk(chunk, OpConstLong, line);
   write_chunk(chunk, (uint8_t)(idx & 0xff), line);
   write_chunk(chunk, (uint8_t)((idx >> 8) & 0xff), line);
@@ -115,7 +107,7 @@ uint32_t push_constant(Chunk *chunk, Value value, uint32_t line) {
 void write_constant_chunk(Chunk *chunk, uint32_t constant, uint32_t line) {
   if (constant < UINT8_MAX) {
     write_chunk(chunk, OpConst, line);
-    write_chunk(chunk, (uint8_t) constant, line);
+    write_chunk(chunk, (uint8_t)constant, line);
     return;
   }
   write_chunk(chunk, OpConstLong, line);
@@ -124,4 +116,3 @@ void write_constant_chunk(Chunk *chunk, uint32_t constant, uint32_t line) {
   write_chunk(chunk, (uint8_t)((constant >> 16) & 0xff), line);
   return;
 }
-
