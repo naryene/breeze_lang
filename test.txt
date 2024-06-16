@@ -1,8 +1,10 @@
-fn a() {b();}
-fn b() {c();}
-fn c() {
-  c("tooo");
-}
+fn fib(n) {
+  if (n < 2) {
+    return n;
+  }
+  return fib(n - 2) + fib(n - 1);
+} 
 
-
-a();
+let start = clock();
+print fib(35);
+print clock() - start;

@@ -145,7 +145,7 @@ static void emit_word(uint8_t byte1, uint8_t byte2) {
   emit_byte(byte2);
 }
 
-static void emit_return() { emit_byte(OpRet); }
+static void emit_return() { emit_word(OpNull, OpRet); }
 
 static bool max_constants_error(const uint32_t idx) {
   if (idx > UINT16_MAX) {
@@ -182,12 +182,13 @@ static void emit_constant_idx(const uint32_t idx) {
 }
 
 static uint32_t emit_name(const Token *name) {
-  // for (uint32_t idx = 0; idx<current_chunk()->constants.len; idx+=1){
-  //   Value *value = &current_chunk()->constants.values[idx];
-  //   if (IS_STRING(*value) && AS_STRING(*value)->len == name->len && memcmp(name->start, AS_STRING(*value)->chars, name->len) == 0) {
-  //     return idx;
-  //   }
-  // }
+  for (uint32_t idx = 0; idx < current_chunk()->constants.len; idx += 1) {
+    Value *value = &current_chunk()->constants.values[idx];
+    if (IS_STRING(*value) && AS_STRING(*value)->len == name->len &&
+        memcmp(name->start, AS_STRING(*value)->chars, name->len) == 0) {
+      return idx;
+    }
+  }
   ObjString *string = copy_string(name->start, name->len);
   return emit_constant_(OBJ_VAL(string));
 }
@@ -234,11 +235,14 @@ static void var_declaration();
 static void fn_declaration();
 static void declaration();
 static void block();
-static void statement();
+
 static void print_statement();
+static void return_statement();
 static void if_statement();
 static void while_statement();
 static void for_statement();
+static void expression_statement();
+static void statement();
 
 static ParseRule *get_rule(TokenType type);
 
@@ -350,7 +354,7 @@ static uint8_t argument_list() {
       if (args_len == UINT8_MAX) {
         error("Can't have more than %d arguments.", UINT8_MAX);
       }
-      args_len+=1;
+      args_len += 1;
       if (!match(TokenComma)) {
         break;
       }
@@ -690,10 +694,17 @@ static void print_statement() {
   emit_byte(OpPrint);
 }
 
-static void expression_statement() {
-  expression();
-  consume(TokenSemiColon, "Expect ';' after value.");
-  emit_byte(OpPop);
+static void return_statement() {
+  if (current_compiler->function_type == TypeScript) {
+    error("Can't return from top-level code.");
+  }
+  if (match(TokenSemiColon)) {
+    emit_return();
+  } else {
+    expression();
+    consume(TokenSemiColon, "Expect ';' after return value.");
+    emit_byte(OpRet);
+  }
 }
 
 static void if_statement() {
@@ -775,11 +786,19 @@ static void for_statement() {
   end_scope();
 }
 
+static void expression_statement() {
+  expression();
+  consume(TokenSemiColon, "Expect ';' after value.");
+  emit_byte(OpPop);
+}
+
 static void statement() {
   if (match(TokenPrint)) {
     print_statement();
   } else if (match(TokenIf)) {
     if_statement();
+  } else if (match(TokenReturn)) {
+    return_statement();
   } else if (match(TokenWhile)) {
     while_statement();
   } else if (match(TokenFor)) {

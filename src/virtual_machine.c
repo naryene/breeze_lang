@@ -4,6 +4,7 @@
 #include "object.h"
 #include "table.h"
 #include <string.h>
+#include <time.h>
 
 #ifdef DEBUG_TRACE_EXECUTION
 #include "debug.h"
@@ -18,6 +19,10 @@
 #include <stdlib.h>
 
 VirtualMachine vm;
+
+static Value clock_native(int32_t args_len, Value *args) {
+  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
 
 static void reset_stack() {
   vm.stack_ptr = vm.stack;
@@ -47,12 +52,21 @@ static void runtime_error(const char *format, ...) {
   reset_stack();
 }
 
+static void define_native(const char *name, NativeFn function) {
+  push_stack(OBJ_VAL(copy_string(name, (int32_t)strlen(name))));
+  push_stack(OBJ_VAL(new_native(function)));
+  table_insert(&vm.globals, AS_STRING(vm.stack[0]), vm.stack[1]);
+  pop_stack();
+  pop_stack();
+}
+
 void init_vm() {
   reset_stack();
   vm.objects = NULL;
 
   init_table(&vm.globals);
   init_table(&vm.strings);
+  define_native("clock", clock_native);
 }
 
 void free_vm() {
@@ -81,7 +95,22 @@ static Value peek(uint32_t distance) {
   return vm.stack_ptr[(int32_t)(-1 - distance)];
 }
 
+#ifdef DEBUG_TRACE_EXECUTION
+void print_constants(const Chunk *chunk) {
+  printf("Constants:\n");
+  for (int i = 0; i < chunk->constants.len; i++) {
+    printf("%d: ", i);
+    print_value(chunk->constants.values[i]);
+    printf("\n");
+  }
+}
+#endif
+
 static bool call(ObjFunction *function, uint8_t args_len) {
+
+#ifdef DEBUG_TRACE_EXECUTION
+  print_constants(&function->chunk);
+#endif
   if (args_len != function->arity) {
     runtime_error("Expected %d arguments but got %d.", function->arity,
                   args_len);
@@ -105,6 +134,13 @@ static bool call_value(Value callee, uint8_t args_len) {
     switch (OBJ_TYPE(callee)) {
     case ObjFunctionType:
       return call(AS_FUNCTION(callee), args_len);
+    case ObjNativeType: {
+      NativeFn native = AS_NATIVE(callee);
+      Value result = native(args_len, vm.stack_ptr - args_len);
+      vm.stack_ptr -= args_len + 1;
+      push_stack(result);
+      return true;
+    }
     default:
       break;
     }
@@ -348,7 +384,16 @@ static InterpretResult run() {
       break;
     }
     case OpRet: {
-      return InterpretOk;
+      Value result = pop_stack();
+      vm.frames_len -= 1;
+      if (vm.frames_len == 0) {
+        pop_stack();
+        return InterpretOk;
+      }
+      vm.stack_ptr = frame->frame_ptr;
+      push_stack(result);
+      frame = &vm.frames[vm.frames_len - 1];
+      break;
     }
     }
   }
@@ -361,22 +406,11 @@ static InterpretResult run() {
 #undef BINARY_OP
 }
 
-// void print_constants(const Chunk *chunk) {
-//   printf("Constants:\n");
-//   for (int i = 0; i < chunk->constants.len; i++) {
-//     printf("%d: ", i);
-//     print_value(chunk->constants.values[i]);
-//     printf("\n");
-//   }
-// }
-
 InterpretResult interpret(const char *source) {
   ObjFunction *function = compile(source);
   if (function == NULL) {
     return InterpretCompileErr;
   }
-
-  // print_constants(&function->chunk);
 
   push_stack(OBJ_VAL(function));
   call(function, 0);

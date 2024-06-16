@@ -11,13 +11,18 @@
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
 #define IS_FUNCTION(value) is_obj_type(value, ObjFunctionType)
+#define IS_NATIVE(value) is_obj_type(value, ObjNativeType)
 #define IS_STRING(value) is_obj_type(value, ObjStringType)
 
-#define AS_FUNCTION(value) ((ObjFunction *) AS_OBJ(value))
+#define AS_FUNCTION(value) ((ObjFunction *)AS_OBJ(value))
+#define AS_NATIVE(value) (((ObjNative *)AS_OBJ(value))->function)
 #define AS_STRING(value) ((ObjString *)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString *)AS_OBJ(value))->chars)
-
-typedef enum { ObjFunctionType, ObjStringType } ObjType;
+typedef enum {
+  ObjNativeType,
+  ObjFunctionType,
+  ObjStringType,
+} ObjType;
 
 struct Obj {
   ObjType type;
@@ -31,6 +36,13 @@ typedef struct {
   ObjString *name;
 } ObjFunction;
 
+typedef Value (*NativeFn)(int32_t args_len, Value *args);
+
+typedef struct {
+  Obj obj;
+  NativeFn function;
+} ObjNative;
+
 struct ObjString {
   Obj obj;
   uint32_t len;
@@ -39,6 +51,7 @@ struct ObjString {
 };
 
 ObjFunction *new_function();
+ObjNative *new_native(NativeFn function);
 ObjString *take_string(char *chars, uint32_t len);
 ObjString *copy_string(const char *chars, uint32_t len);
 
