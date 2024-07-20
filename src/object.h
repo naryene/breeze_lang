@@ -10,18 +10,22 @@
 
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
+#define IS_CLOSURE(value) is_obj_type(value, ObjClosureType)
 #define IS_FUNCTION(value) is_obj_type(value, ObjFunctionType)
 #define IS_NATIVE(value) is_obj_type(value, ObjNativeType)
 #define IS_STRING(value) is_obj_type(value, ObjStringType)
 
+#define AS_CLOSURE(value) ((ObjClosure *) AS_OBJ(value))
 #define AS_FUNCTION(value) ((ObjFunction *)AS_OBJ(value))
 #define AS_NATIVE(value) (((ObjNative *)AS_OBJ(value))->function)
 #define AS_STRING(value) ((ObjString *)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString *)AS_OBJ(value))->chars)
+
 typedef enum {
   ObjNativeType,
   ObjFunctionType,
   ObjStringType,
+  ObjClosureType,
 } ObjType;
 
 struct Obj {
@@ -50,10 +54,16 @@ struct ObjString {
   uint32_t hash;
 };
 
+typedef struct {
+  Obj obj;
+  ObjFunction *function;
+} ObjClosure;
+
+ObjClosure *new_closure(ObjFunction *);
 ObjFunction *new_function();
-ObjNative *new_native(NativeFn function);
-ObjString *take_string(char *chars, uint32_t len);
-ObjString *copy_string(const char *chars, uint32_t len);
+ObjNative *new_native(NativeFn);
+ObjString *take_string(char *, uint32_t);
+ObjString *copy_string(const char *, uint32_t);
 
 static inline bool is_obj_type(Value value, ObjType type) {
   return IS_OBJ(value) && (AS_OBJ(value)->type == type);

@@ -440,6 +440,7 @@ static void function(FunctionType function_type) {
   block();
 
   ObjFunction *function = end_compiler();
+  emit_byte(OpClosure);
   emit_constant(OBJ_VAL(function));
 }
 

@@ -6,11 +6,11 @@
 #include "table.h"
 #include "value.h"
 
-#define FRAMES_MAX 64 
-#define STACK_MAX (FRAMES_MAX * (UINT8_MAX+1)) 
+#define FRAMES_MAX 64
+#define STACK_MAX (FRAMES_MAX * (UINT8_MAX + 1))
 
 typedef struct {
-  ObjFunction *function;
+  ObjClosure *closure;
   uint8_t *inst_ptr;
   Value *frame_ptr;
 } CallFrame;

@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-VirtualMachine vm;
+    VirtualMachine vm;
 
 static Value clock_native(int32_t args_len, Value *args) {
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
@@ -38,7 +38,7 @@ static void runtime_error(const char *format, ...) {
 
   for (int32_t i = vm.frames_len - 1; i >= 0; i -= 1) {
     CallFrame *frame = &vm.frames[i];
-    ObjFunction *function = frame->function;
+    ObjFunction *function = frame->closure->function;
     size_t inst = frame->inst_ptr - function->chunk.code - 1;
     fprintf(stderr, "[line %d] in ", get_line(function->chunk.lines, inst));
 
@@ -106,7 +106,8 @@ void print_constants(const Chunk *chunk) {
 }
 #endif
 
-static bool call(ObjFunction *function, uint8_t args_len) {
+static bool call(ObjClosure *closure, uint8_t args_len) {
+  ObjFunction *function = closure->function;
 
 #ifdef DEBUG_TRACE_EXECUTION
   print_constants(&function->chunk);
@@ -123,7 +124,7 @@ static bool call(ObjFunction *function, uint8_t args_len) {
   }
   CallFrame *frame = &vm.frames[vm.frames_len];
   vm.frames_len += 1;
-  frame->function = function;
+  frame->closure = closure;
   frame->inst_ptr = function->chunk.code;
   frame->frame_ptr = vm.stack_ptr - args_len - 1;
   return true;
@@ -132,8 +133,8 @@ static bool call(ObjFunction *function, uint8_t args_len) {
 static bool call_value(Value callee, uint8_t args_len) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
-    case ObjFunctionType:
-      return call(AS_FUNCTION(callee), args_len);
+    case ObjClosureType:
+      return call(AS_CLOSURE(callee), args_len);
     case ObjNativeType: {
       NativeFn native = AS_NATIVE(callee);
       Value result = native(args_len, vm.stack_ptr - args_len);
@@ -181,19 +182,10 @@ static InterpretResult run() {
   (frame->inst_ptr += 2,                                                       \
    (uint16_t)(frame->inst_ptr[-2] | (frame->inst_ptr[-1] << 8)))
 
-#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
-
-#define READ_CONSTANT_LONG()                                                   \
+#define READ_IDX(inst)                                                         \
   ({                                                                           \
-    uint32_t idx = (READ_BYTE()) | (READ_BYTE() << 8) | (READ_BYTE() << 16);   \
-    frame->function->chunk.constants.values[idx];                              \
-  })
-
-#define READ_IDX()                                                             \
-  ({                                                                           \
-    uint8_t constant_op = READ_BYTE();                                         \
     uint32_t idx;                                                              \
-    if (constant_op == OpConst) {                                              \
+    if (inst == OpConst) {                                                     \
       idx = (uint32_t)READ_BYTE();                                             \
     } else {                                                                   \
       idx = (uint32_t)((READ_BYTE()) | (READ_BYTE() << 8) |                    \
@@ -202,10 +194,13 @@ static InterpretResult run() {
     idx;                                                                       \
   })
 
+#define READ_CONSTANT(inst)                                                    \
+  (frame->closure->function->chunk.constants.values[READ_IDX(inst)])
+
 #define READ_STRING()                                                          \
   ({                                                                           \
-    uint32_t idx = READ_IDX();                                                 \
-    Value constant = frame->function->chunk.constants.values[idx];             \
+    uint32_t idx = READ_IDX(READ_BYTE());                                      \
+    Value constant = frame->closure->function->chunk.constants.values[idx];    \
     AS_STRING(constant);                                                       \
   })
 
@@ -231,19 +226,16 @@ static InterpretResult run() {
       printf(" ]");
     }
     printf("\n");
-    disassemble_inst(&frame->function->chunk,
-                     (uint32_t)(frame->inst_ptr - frame->function->chunk.code));
+    disassemble_inst(
+        &frame->closure->function->chunk,
+        (uint32_t)(frame->inst_ptr - frame->closure->function->chunk.code));
 #endif /* ifdef DEBUG_TRACE_EXECUTION                                          \
         */
     uint8_t inst;
     switch (inst = READ_BYTE()) {
-    case OpConst: {
-      Value constant = READ_CONSTANT();
-      push_stack(constant);
-      break;
-    }
+    case OpConst:
     case OpConstLong: {
-      Value constant = READ_CONSTANT_LONG();
+      Value constant = READ_CONSTANT(inst);
       push_stack(constant);
       break;
     }
@@ -285,12 +277,12 @@ static InterpretResult run() {
       break;
     }
     case OpGetLocal: {
-      uint32_t local_stack_idx = READ_IDX();
+      uint32_t local_stack_idx = READ_IDX(READ_BYTE());
       push_stack(frame->frame_ptr[local_stack_idx]);
       break;
     }
     case OpSetLocal: {
-      uint32_t local_stack_idx = READ_IDX();
+      uint32_t local_stack_idx = READ_IDX(READ_BYTE());
       frame->frame_ptr[local_stack_idx] = peek(0);
       break;
     }
@@ -366,13 +358,13 @@ static InterpretResult run() {
         return check_result;
       }
       if (AS_BOOL(peek(0)) == false) {
-        frame->inst_ptr = frame->function->chunk.code + offset;
+        frame->inst_ptr = frame->closure->function->chunk.code + offset;
       }
       break;
     }
     case OpJmp: {
       uint16_t offset = READ_WORD();
-      frame->inst_ptr = frame->function->chunk.code + offset;
+      frame->inst_ptr = frame->closure->function->chunk.code + offset;
       break;
     }
     case OpCall: {
@@ -381,6 +373,12 @@ static InterpretResult run() {
         return InterpretRuntimeErr;
       }
       frame = &vm.frames[vm.frames_len - 1];
+      break;
+    }
+    case OpClosure: {
+      ObjFunction *function = AS_FUNCTION(READ_CONSTANT(READ_BYTE()));
+      ObjClosure *closure = new_closure(function);
+      push_stack(OBJ_VAL(closure));
       break;
     }
     case OpRet: {
@@ -413,7 +411,10 @@ InterpretResult interpret(const char *source) {
   }
 
   push_stack(OBJ_VAL(function));
-  call(function, 0);
+  ObjClosure *closure = new_closure(function);
+  pop_stack();
+  push_stack(OBJ_VAL(closure));
+  call(closure, 0);
 
   return run();
 }

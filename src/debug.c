@@ -76,6 +76,10 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   switch (inst) {
   case OpRet:
     return simple_inst("OpRet", offset);
+  case OpClosure: {
+    offset += 1;
+    return constant_inst("OpClosure", chunk, offset);
+  }
   case OpCall:
     return byte_inst("OpCall", chunk, offset);
   case OpJmp:

@@ -6,5 +6,5 @@ fn fib(n) {
 } 
 
 let start = clock();
-print fib(35);
+print fib(5);
 print clock() - start;

@@ -19,6 +19,14 @@ void *reallocate(void *ptr, size_t old_capacity, size_t new_capacity) {
 
 static void free_object(Obj *object) {
   switch (object->type) {
+  case ObjClosureType: {
+    FREE(ObjClosure, object);
+    break;
+  }
+  case ObjNativeType: {
+    FREE(ObjNative, object);
+    break;
+  }
   case ObjFunctionType: {
     ObjFunction *function = (ObjFunction *)object;
     free_chunk(&function->chunk);
