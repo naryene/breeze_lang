@@ -23,6 +23,7 @@ ObjClosure *new_closure(ObjFunction *function) {
 ObjFunction *new_function() {
   ObjFunction *function = ALLOCATE_OBJ(ObjFunction, ObjFunctionType);
   function->arity = 0;
+  function->upvalues_len = 0;
   function->name = NULL;
   init_chunk(&function->chunk);
   return function;

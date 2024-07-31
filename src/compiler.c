@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include "chunk.h"
-#include "common.h"
 #include "compiler.h"
 #include "object.h"
 #include "scanner.h"
@@ -52,6 +51,11 @@ typedef struct {
   int32_t depth;
 } Local;
 
+typedef struct {
+  uint32_t index;
+  bool is_local;
+} Upvalue;
+
 typedef enum { TypeFunction, TypeScript } FunctionType;
 
 typedef struct Compiler {
@@ -60,6 +64,7 @@ typedef struct Compiler {
   FunctionType function_type;
   Local locals[UINT16_COUNT];
   uint32_t locals_len;
+  Upvalue upvalues[UINT16_COUNT];
   uint32_t scope_depth;
 } Compiler;
 
@@ -213,7 +218,7 @@ static void patch_jmp(int32_t offset) {
   if ((jmp - offset - 2) > UINT16_MAX) {
     error("Too much code to jump over.");
   }
-  current_chunk()->code[offset] = (jmp)&0xff;
+  current_chunk()->code[offset] = (jmp) & 0xff;
   current_chunk()->code[offset + 1] = (jmp >> 8) & 0xff;
 }
 
@@ -266,12 +271,54 @@ static int32_t resolve_local(Compiler *compiler, const Token *name) {
   return -1;
 }
 
+static int32_t add_upvalue(Compiler *compiler, const int32_t index,
+                           bool is_local) {
+  uint32_t upvalues_len = compiler->function->upvalues_len;
+
+  for (uint32_t i = 0; i < upvalues_len; i += 1) {
+    Upvalue *upvalue = &compiler->upvalues[i];
+    if (upvalue->index == index && upvalue->is_local == is_local) {
+      return i;
+    }
+  }
+
+  if (upvalues_len == UINT16_COUNT) {
+    error("Too many closure variables in function.");
+    return 0;
+  }
+
+  compiler->upvalues[upvalues_len].is_local = is_local;
+  compiler->upvalues[upvalues_len].index = index;
+  return compiler->function->upvalues_len += 1;
+}
+
+static int32_t resolve_upvalue(Compiler *compiler, const Token *name) {
+  if (compiler->enclosing == NULL) {
+    return -1;
+  }
+
+  int32_t local_idx = resolve_local(compiler->enclosing, name);
+  if (local_idx != -1) {
+    return add_upvalue(compiler, local_idx, true);
+  }
+
+  int32_t upvalue = resolve_upvalue(compiler->enclosing, name);
+  if (upvalue != -1) {
+    return add_upvalue(compiler, upvalue, false);
+  }
+
+  return -1;
+}
+
 static void named_variable(const Token *name, bool can_assign) {
   uint8_t get_op, set_op;
   int32_t arg = resolve_local(current_compiler, name);
   if (arg != -1) {
     get_op = OpGetLocal;
     set_op = OpSetLocal;
+  } else if ((arg = resolve_upvalue(current_compiler, name)) != -1) {
+    get_op = OpGetUpvalue;
+    set_op = OpSetUpvalue;
   } else {
     arg = emit_name(name);
     get_op = OpGetGlobal;
