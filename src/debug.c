@@ -4,6 +4,7 @@
 
 #include "chunk.h"
 #include "debug.h"
+#include "object.h"
 #include "value.h"
 
 static uint32_t simple_inst(const char *name, uint32_t offset) {
@@ -11,10 +12,16 @@ static uint32_t simple_inst(const char *name, uint32_t offset) {
   return offset + 1;
 }
 
-static uint32_t constant_inst(const char *name, const Chunk *chunk,
-                              uint32_t offset) {
+typedef struct {
+  uint32_t offset;
+  uint32_t constant_idx;
+} OffsetConstantIdx;
+
+static OffsetConstantIdx constant_inst(const char *name, const Chunk *chunk,
+                                       uint32_t offset) {
+  uint32_t constant_idx;
   uint8_t constant_op = chunk->code[offset];
-  uint8_t constant_idx;
+
   if (constant_op == OpConst) {
     constant_idx = chunk->code[offset + 1];
     offset += 2;
@@ -23,10 +30,12 @@ static uint32_t constant_inst(const char *name, const Chunk *chunk,
                    (chunk->code[offset + 3] << 16);
     offset += 4;
   }
+
   printf("%-16s %4d '", name, constant_idx);
   print_value(chunk->constants.values[constant_idx]);
   printf("'\n");
-  return offset;
+
+  return (OffsetConstantIdx){.offset = offset, .constant_idx = constant_idx};
 }
 
 static uint32_t byte_inst(const char *name, const Chunk *chunk,
@@ -78,7 +87,19 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
     return simple_inst("OpRet", offset);
   case OpClosure: {
     offset += 1;
-    return constant_inst("OpClosure", chunk, offset);
+    OffsetConstantIdx offset_constant_idx =
+        constant_inst("OpClosure", chunk, offset);
+    uint32_t constant_idx = offset_constant_idx.constant_idx,
+             offset = offset_constant_idx.offset;
+    ObjFunction *function = AS_FUNCTION(chunk->constants.values[constant_idx]);
+    for (uint32_t i = 0; i < function->upvalues_len; i += 1) {
+      bool is_local = chunk->code[offset];
+      // TODO: turn index into 32 bits
+      uint8_t index = chunk->code[offset + 1];
+      offset += 2;
+      printf("%04d    |             %s %d\n", offset - 2,
+             is_local ? "local" : "upvalue", index);
+    }
   }
   case OpCall:
     return byte_inst("OpCall", chunk, offset);
@@ -87,9 +108,9 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   case OpJmpIfFalse:
     return jmp_inst("OpJmpIfFalse", 1, chunk, offset);
   case OpConst:
-    return constant_inst("OpConst", chunk, offset);
+    return constant_inst("OpConst", chunk, offset).offset;
   case OpConstLong:
-    return constant_inst("OpConstLong", chunk, offset);
+    return constant_inst("OpConstLong", chunk, offset).offset;
   case OpNull:
     return simple_inst("OpNull", offset);
   case OpTrue:
@@ -105,7 +126,11 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   case OpDefineGlobal:
     return simple_inst("OpDefineGlobal", offset);
   case OpSetGlobal:
-    return constant_inst("OpSetGlobal", chunk, offset);
+    return constant_inst("OpSetGlobal", chunk, offset).offset;
+  case OpGetUpvalue:
+    return special_inst("OpGetUpvalue", chunk, offset);
+  case OpSetUpvalue:
+    return special_inst("OpSetUpvalue", chunk, offset);
   case OpGetLocal:
     return special_inst("OpGetLocal", chunk, offset);
   case OpSetLocal:

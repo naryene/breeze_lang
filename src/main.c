@@ -1,6 +1,4 @@
-#include "chunk.h"
 #include "common.h"
-#include "value.h"
 #include "virtual_machine.h"
 #include <stdio.h>
 #include <stdlib.h>

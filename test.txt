@@ -1,10 +1,12 @@
+let x = 106;
 fn fib(n) {
-  if (n < 2) {
-    return n;
+  fn test() {
+    print("Hello");
+    return x;
   }
-  return fib(n - 2) + fib(n - 1);
+  return test;  
 } 
 
 let start = clock();
-print fib(5);
+print(fib(4)());
 print clock() - start;

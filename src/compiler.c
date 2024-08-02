@@ -486,9 +486,14 @@ static void function(FunctionType function_type) {
   consume(TokenLeftBrace, "Expect '{' before function body.");
   block();
 
-  ObjFunction *function = end_compiler();
+  ObjFunction *func = end_compiler();
   emit_byte(OpClosure);
-  emit_constant(OBJ_VAL(function));
+  emit_constant(OBJ_VAL(func));
+
+  for (uint32_t i = 0; i < func->upvalues_len; i += 1) {
+    emit_byte(compiler.upvalues[i].is_local);
+    emit_byte(compiler.upvalues[i].index);
+  }
 }
 
 ObjFunction *compile(const char *source) {
@@ -507,6 +512,7 @@ ObjFunction *compile(const char *source) {
     return NULL;
   }
   ObjFunction *function = end_compiler();
+
   return function;
 }
 
