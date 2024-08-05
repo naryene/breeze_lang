@@ -492,7 +492,7 @@ static void function(FunctionType function_type) {
 
   for (uint32_t i = 0; i < func->upvalues_len; i += 1) {
     emit_byte(compiler.upvalues[i].is_local);
-    emit_byte(compiler.upvalues[i].index);
+    emit_constant_idx(compiler.upvalues[i].index);
   }
 }
 

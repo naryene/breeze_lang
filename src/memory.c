@@ -2,6 +2,7 @@
 
 #include "chunk.h"
 #include "memory.h"
+#include "object.h"
 #include "virtual_machine.h"
 
 void *reallocate(void *ptr, size_t old_capacity, size_t new_capacity) {
@@ -20,6 +21,8 @@ void *reallocate(void *ptr, size_t old_capacity, size_t new_capacity) {
 static void free_object(Obj *object) {
   switch (object->type) {
   case ObjClosureType: {
+    ObjClosure *closure = (ObjClosure *)object;
+    FREE_ARRAY(ObjUpvalue *, closure->upvalues, closure->upvalues_len);
     FREE(ObjClosure, object);
     break;
   }
@@ -37,6 +40,10 @@ static void free_object(Obj *object) {
     ObjString *string = (ObjString *)object;
     FREE_ARRAY(char, (void *)string->chars, string->len + 1);
     FREE(ObjString, object);
+    break;
+  }
+  case ObjUpvalueType: {
+    FREE(ObjUpvalue, object);
     break;
   }
   }

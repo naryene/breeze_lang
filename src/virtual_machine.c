@@ -4,6 +4,7 @@
 #include "object.h"
 #include "table.h"
 #include <string.h>
+#include <sys/types.h>
 #include <time.h>
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -18,7 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-    VirtualMachine vm;
+VirtualMachine vm;
 
 static Value clock_native(int32_t args_len, Value *args) {
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
@@ -148,6 +149,11 @@ static bool call_value(Value callee, uint8_t args_len) {
   }
   runtime_error("Can only call functions and classes.");
   return false;
+}
+
+static ObjUpvalue *capture_upvalue(Value *local) {
+  ObjUpvalue *created_upvalue = new_upvalue(local);
+  return created_upvalue;
 }
 
 static InterpretResult check_bool(Value value) {
@@ -286,6 +292,16 @@ static InterpretResult run() {
       frame->frame_ptr[local_stack_idx] = peek(0);
       break;
     }
+    case OpGetUpvalue: {
+      uint32_t upvalue_idx = READ_IDX(READ_BYTE());
+      push_stack(*frame->closure->upvalues[upvalue_idx]->location);
+      break;
+    }
+    case OpSetUpvalue: {
+      uint32_t upvalue_idx = READ_IDX(READ_BYTE());
+      *frame->closure->upvalues[upvalue_idx]->location = peek(0);
+      break;
+    }
     case OpEq: {
       Value right = pop_stack();
       Value left = pop_stack();
@@ -379,6 +395,15 @@ static InterpretResult run() {
       ObjFunction *function = AS_FUNCTION(READ_CONSTANT(READ_BYTE()));
       ObjClosure *closure = new_closure(function);
       push_stack(OBJ_VAL(closure));
+      for (uint32_t i = 0; closure->upvalues_len; i += 1) {
+        uint8_t is_local = READ_BYTE();
+        uint32_t index = READ_IDX(READ_BYTE());
+        if (is_local) {
+          closure->upvalues[i] = capture_upvalue(frame->frame_ptr + index);
+        } else {
+          closure->upvalues[i] = frame->closure->upvalues[index];
+        }
+      }
       break;
     }
     case OpRet: {
