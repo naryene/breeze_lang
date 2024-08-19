@@ -1,4 +1,5 @@
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +50,7 @@ typedef struct {
 typedef struct {
   Token name;
   int32_t depth;
+  bool is_captured;
 } Local;
 
 typedef struct {
@@ -289,16 +291,19 @@ static int32_t add_upvalue(Compiler *compiler, const int32_t index,
 
   compiler->upvalues[upvalues_len].is_local = is_local;
   compiler->upvalues[upvalues_len].index = index;
-  return compiler->function->upvalues_len += 1;
+  compiler->function->upvalues_len += 1;
+  return compiler->function->upvalues_len - 1;
 }
 
 static int32_t resolve_upvalue(Compiler *compiler, const Token *name) {
+
   if (compiler->enclosing == NULL) {
     return -1;
   }
 
   int32_t local_idx = resolve_local(compiler->enclosing, name);
   if (local_idx != -1) {
+    compiler->enclosing->locals[local_idx].is_captured = false;
     return add_upvalue(compiler, local_idx, true);
   }
 
@@ -346,6 +351,7 @@ static void add_local(const Token *name) {
   current_compiler->locals_len += 1;
   local->name = *name;
   local->depth = -1;
+  local->is_captured = false;
 }
 
 static void declare_variable() {
@@ -418,7 +424,12 @@ static void end_scope() {
   while (current_compiler->locals_len > 0 &&
          current_compiler->locals[current_compiler->locals_len - 1].depth >
              current_compiler->scope_depth) {
-    emit_byte(OpPop);
+    if (current_compiler->locals[current_compiler->locals_len - 1]
+            .is_captured) {
+      emit_byte(OpCloseUpvalue);
+    } else {
+      emit_byte(OpPop);
+    }
     current_compiler->locals_len -= 1;
   }
 }
@@ -445,6 +456,7 @@ static void init_compiler(Compiler *compiler, FunctionType function_type) {
   Local *local = &current_compiler->locals[current_compiler->locals_len];
   current_compiler->locals_len += 1;
   local->depth = 0;
+  local->is_captured = false;
   local->name.start = "";
   local->name.len = 0;
 }
@@ -468,6 +480,7 @@ static void function(FunctionType function_type) {
   Compiler compiler;
   init_compiler(&compiler, function_type);
   begin_scope();
+
   consume(TokenLeftParen, "Expect '(' after function name.");
   if (!check(TokenRightParen)) {
     while (true) {
@@ -483,15 +496,17 @@ static void function(FunctionType function_type) {
     }
   }
   consume(TokenRightParen, "Expect ')' after parameters.");
+
   consume(TokenLeftBrace, "Expect '{' before function body.");
   block();
 
   ObjFunction *func = end_compiler();
+
   emit_byte(OpClosure);
   emit_constant(OBJ_VAL(func));
 
   for (uint32_t i = 0; i < func->upvalues_len; i += 1) {
-    emit_byte(compiler.upvalues[i].is_local);
+    emit_byte(compiler.upvalues[i].is_local ? 1 : 0);
     emit_constant_idx(compiler.upvalues[i].index);
   }
 }
@@ -872,7 +887,7 @@ static void block() {
 }
 
 static void fn_declaration() {
-  uint8_t variable = parse_variable("Expect function name.");
+  uint32_t variable = parse_variable("Expect function name.");
   init_variable();
   function(TypeFunction);
   define_variable(variable);

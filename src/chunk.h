@@ -22,6 +22,7 @@ typedef enum {
   OpDiv,
   OpPrint,
   OpPop,
+  OpCloseUpvalue,
   OpDefineGlobal,
   OpSetGlobal,
   OpGetGlobal,

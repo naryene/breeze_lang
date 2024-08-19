@@ -90,6 +90,8 @@ ObjString *copy_string(const char *chars, uint32_t len) {
 ObjUpvalue *new_upvalue(Value *slot) {
   ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, ObjUpvalueType);
   upvalue->location = slot;
+  upvalue->closed = NULL_VAL;
+  upvalue->next = NULL;
   return upvalue;
 }
 

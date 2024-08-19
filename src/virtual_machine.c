@@ -1,10 +1,6 @@
-#include "virtual_machine.h"
-#include "chunk.h"
 #include "memory.h"
-#include "object.h"
-#include "table.h"
+#include "value.h"
 #include <string.h>
-#include <sys/types.h>
 #include <time.h>
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -12,10 +8,7 @@
 #endif /* ifdef DEBUG_TRACE_EXECUTION */
 
 #include "compiler.h"
-#include "value.h"
-
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -63,6 +56,7 @@ static void define_native(const char *name, NativeFn function) {
 
 void init_vm() {
   reset_stack();
+  vm.open_upvalues = NULL;
   vm.objects = NULL;
 
   init_table(&vm.globals);
@@ -152,8 +146,29 @@ static bool call_value(Value callee, uint8_t args_len) {
 }
 
 static ObjUpvalue *capture_upvalue(Value *local) {
+  ObjUpvalue **upvalue_pptr = &vm.open_upvalues;
+  while (*upvalue_pptr != NULL && (*upvalue_pptr)->location > local) {
+    upvalue_pptr = &(*upvalue_pptr)->next;
+  }
+
+  if (*upvalue_pptr != NULL && (*upvalue_pptr)->location == local) {
+    return *upvalue_pptr;
+  }
+
   ObjUpvalue *created_upvalue = new_upvalue(local);
+  created_upvalue->next = *upvalue_pptr;
+  *upvalue_pptr = created_upvalue;
+
   return created_upvalue;
+}
+
+static void close_upvalues(Value *local) {
+  while (vm.open_upvalues != NULL && vm.open_upvalues->location >= local) {
+    ObjUpvalue *upvalue = vm.open_upvalues;
+    upvalue->closed = *upvalue->location;
+    upvalue->location = &upvalue->closed;
+    vm.open_upvalues = upvalue->next;
+  }
 }
 
 static InterpretResult check_bool(Value value) {
@@ -395,7 +410,7 @@ static InterpretResult run() {
       ObjFunction *function = AS_FUNCTION(READ_CONSTANT(READ_BYTE()));
       ObjClosure *closure = new_closure(function);
       push_stack(OBJ_VAL(closure));
-      for (uint32_t i = 0; closure->upvalues_len; i += 1) {
+      for (uint32_t i = 0; i < closure->upvalues_len; i += 1) {
         uint8_t is_local = READ_BYTE();
         uint32_t index = READ_IDX(READ_BYTE());
         if (is_local) {
@@ -406,8 +421,14 @@ static InterpretResult run() {
       }
       break;
     }
+    case OpCloseUpvalue: {
+      close_upvalues(vm.stack_ptr - 1);
+      pop_stack();
+      break;
+    }
     case OpRet: {
       Value result = pop_stack();
+      close_upvalues(frame->frame_ptr);
       vm.frames_len -= 1;
       if (vm.frames_len == 0) {
         pop_stack();

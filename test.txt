@@ -1,12 +1,9 @@
-let x = 106;
 fn fib(n) {
   fn test() {
-    print("Hello");
-    return x;
+    print(n);
   }
+
   return test;  
 } 
 
-let start = clock();
-print(fib(4)());
-print clock() - start;
+fib(69)();

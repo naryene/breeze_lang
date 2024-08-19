@@ -17,8 +17,8 @@ typedef struct {
   uint32_t constant_idx;
 } OffsetConstantIdx;
 
-static OffsetConstantIdx constant_inst(const char *name, const Chunk *chunk,
-                                       uint32_t offset) {
+static uint32_t read_idx(const Chunk *chunk, uint32_t offset) {
+
   uint32_t constant_idx;
   uint8_t constant_op = chunk->code[offset];
 
@@ -30,7 +30,11 @@ static OffsetConstantIdx constant_inst(const char *name, const Chunk *chunk,
                    (chunk->code[offset + 3] << 16);
     offset += 4;
   }
-
+  return constant_idx;
+}
+static OffsetConstantIdx constant_inst(const char *name, const Chunk *chunk,
+                                       uint32_t offset) {
+  uint32_t constant_idx = read_idx(chunk, offset);
   printf("%-16s %4d '", name, constant_idx);
   print_value(chunk->constants.values[constant_idx]);
   printf("'\n");
@@ -47,17 +51,9 @@ static uint32_t byte_inst(const char *name, const Chunk *chunk,
 
 static uint32_t special_inst(const char *name, const Chunk *chunk,
                              uint32_t offset) {
-  uint8_t op = chunk->code[offset + 1];
-  uint32_t slot;
-  if (op == OpConst) {
-    slot = chunk->code[offset + 2];
-    offset += 3;
-  } else {
-    slot = (uint32_t)(chunk->code[offset + 2] | (chunk->code[offset + 3] << 8) |
-                      (chunk->code[offset + 4] << 16));
-    offset += 5;
-  }
-  printf("%-16s %4d\n", name, slot);
+  offset += 1;
+  uint32_t constant_idx = read_idx(chunk, offset);
+  printf("%-16s %4d\n", name, constant_idx);
 
   return offset;
 }
@@ -95,12 +91,15 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
     for (uint32_t i = 0; i < function->upvalues_len; i += 1) {
       bool is_local = chunk->code[offset];
       // TODO: turn index into 32 bits
-      uint8_t index = chunk->code[offset + 1];
-      offset += 2;
+      offset += 1;
+      uint32_t constant_idx = read_idx(chunk, offset);
       printf("%04d    |             %s %d\n", offset - 2,
-             is_local ? "local" : "upvalue", index);
+             is_local ? "local" : "upvalue", constant_idx);
     }
+    return offset;
   }
+  case OpCloseUpvalue:
+    return simple_inst("OpCloseUpvalue", offset);
   case OpCall:
     return byte_inst("OpCall", chunk, offset);
   case OpJmp:
