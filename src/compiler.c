@@ -147,7 +147,7 @@ static void emit_byte(uint8_t byte) {
   write_chunk(current_chunk(), byte, parser.previous.line);
 }
 
-static void emit_word(uint8_t byte1, uint8_t byte2) {
+static void emit_word(const uint8_t byte1, const uint8_t byte2) {
   emit_byte(byte1);
   emit_byte(byte2);
 }
@@ -440,25 +440,35 @@ static void scoped_block() {
   end_scope();
 }
 
-static void init_compiler(Compiler *compiler, FunctionType function_type) {
+static void init_compiler(Compiler *compiler, const FunctionType function_type) {
   compiler->enclosing = current_compiler;
+
   compiler->function = NULL;
   compiler->function_type = function_type;
+
   compiler->locals_len = 0;
   compiler->scope_depth = 0;
+
   compiler->function = new_function();
+
   current_compiler = compiler;
+
   if (function_type != TypeScript) {
     current_compiler->function->name =
         copy_string(parser.previous.start, parser.previous.len);
   }
 
-  Local *local = &current_compiler->locals[current_compiler->locals_len];
   current_compiler->locals_len += 1;
+  Local *local = &current_compiler->locals[current_compiler->locals_len - 1];
   local->depth = 0;
   local->is_captured = false;
-  local->name.start = "";
-  local->name.len = 0;
+  if (function_type != TypeFunction) {
+    local->name.start = "this";
+    local->name.len = 4;
+  } else {
+    local->name.start = "";
+    local->name.len = 0;
+  }
 }
 
 static ObjFunction *end_compiler() {
@@ -476,7 +486,7 @@ static ObjFunction *end_compiler() {
   return function;
 }
 
-static void function(FunctionType function_type) {
+static void function(const FunctionType function_type) {
   Compiler compiler;
   init_compiler(&compiler, function_type);
   begin_scope();
@@ -495,8 +505,8 @@ static void function(FunctionType function_type) {
       }
     }
   }
-  consume(TokenRightParen, "Expect ')' after parameters.");
 
+  consume(TokenRightParen, "Expect ')' after parameters.");
   consume(TokenLeftBrace, "Expect '{' before function body.");
   block();
 

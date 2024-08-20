@@ -1,9 +1,22 @@
-fn fib(n) {
-  fn test() {
-    print(n);
+fn outer(n) {
+  print("entering outer");
+  fn middle(){
+    print("entering middle");
+    fn inner() {
+      print("entering inner");
+      print(n);
+      print("exiting inner");
+      return n;
+    }
+    print("exiting middle");
+    return inner;
   }
+  print("exiting outer");
+  return middle;
+}
 
-  return test;  
-} 
 
-fib(69)();
+let middle = outer(10);
+let inner = middle();
+let n = inner();
+
