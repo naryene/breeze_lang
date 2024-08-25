@@ -1,6 +1,8 @@
 #ifndef breeze_value_h
 #define breeze_value_h
 
+#include <stdint.h>
+
 #include "common.h"
 
 typedef struct Obj Obj;

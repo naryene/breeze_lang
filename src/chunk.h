@@ -1,8 +1,11 @@
 #ifndef breeze_chunk_h
 #define breeze_chunk_h
 
-#include "common.h"
+#include <stdint.h>
+
 #include "value.h"
+#include "common.h"
+
 
 typedef enum {
   OpRet,

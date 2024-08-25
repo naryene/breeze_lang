@@ -1,6 +1,8 @@
 #ifndef breeze_scanner_h
 #define breeze_scanner_h
 
+#include <stdint.h>
+
 #include "common.h"
 
 typedef enum {

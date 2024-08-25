@@ -1,7 +1,8 @@
-#include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "chunk.h"
+
 #include "memory.h"
 #include "value.h"
 

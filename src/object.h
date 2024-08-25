@@ -1,10 +1,11 @@
 #ifndef breeze_object_h
 #define breeze_object_h
 
-#include "chunk.h"
+#include <stdint.h>
+
 #include "common.h"
 #include "value.h"
-#include <stdint.h>
+#include "chunk.h"
 
 #define ALLOCATE_OBJ(type, object_type)                                        \
   (type *)allocate_object(sizeof(type), object_type)

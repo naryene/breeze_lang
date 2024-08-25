@@ -1,11 +1,10 @@
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
-#include "chunk.h"
 #include "debug.h"
+
 #include "object.h"
-#include "value.h"
 
 static uint32_t simple_inst(const char *name, uint32_t offset) {
   printf("%s\n", name);
@@ -46,8 +45,8 @@ static void constant_inst(const char *name, const Chunk *chunk,
 
 static uint32_t byte_inst(const char *name, const Chunk *chunk,
                           uint32_t offset) {
-  uint8_t slot = chunk->code[offset + 1];
-  printf("%-16s %4d\n", name, slot);
+  uint8_t byte = chunk->code[offset + 1];
+  printf("%-16s %4d\n", name, byte);
   return offset + 2;
 }
 

@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
+
+#include "value.h"
 
 #include "memory.h"
-#include "value.h"
 #include "object.h"
 
 void init_value_vec(ValueVec* vec){

@@ -1,11 +1,24 @@
-#include <stdlib.h>
+#include <stdbool.h>
+
+#include "memory.h"
 
 #include "chunk.h"
-#include "memory.h"
+#include "common.h"
 #include "object.h"
 #include "virtual_machine.h"
 
+#ifdef DEBUG_LOG_GC
+#include "debug.h"
+#include <stdio.h>
+#endif /* ifdef DEBUG_LOG_GC */
+
 void *reallocate(void *ptr, size_t old_capacity, size_t new_capacity) {
+  if (new_capacity > old_capacity) {
+#ifdef DEBUG_STRESS_GC
+    collect_garbage();
+#endif /* ifdef DEBUG_STRESS_GC */
+  }
+
   if (new_capacity == 0) {
     free(ptr);
     return NULL;
@@ -48,8 +61,26 @@ static void free_object(Obj *object) {
   }
   }
 }
-void free_objects() {
-  Obj *object = vm.objects;
+
+static void mark_roots() {
+  for (Value *slot = vm.stack; slot < vm.stack_ptr; slot += 1) {
+    // mark_value(*slot);
+  }
+}
+
+void collect_garbage() {
+#ifdef DEBUG_LOG_GC
+  printf("-- gc begin\n");
+#endif /* ifdef DEBUG_LOG_GC*/
+
+  mark_roots();
+
+#ifdef DEBUG_LOG_GC
+  printf("-- gc end\n");
+#endif /* ifdef DEBUG_LOG_GC*/
+}
+
+void free_objects(Obj *object) {
   while (object != NULL) {
     Obj *next = object->next;
     free_object(object);

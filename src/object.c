@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
+
+#include "object.h"
 
 #include "memory.h"
-#include "object.h"
 #include "virtual_machine.h"
 
 static Obj *allocate_object(uint32_t size, ObjType type) {
@@ -11,6 +13,10 @@ static Obj *allocate_object(uint32_t size, ObjType type) {
 
   object->next = vm.objects;
   vm.objects = object;
+
+  #ifdef DEBUG_LOG_GC
+    printf("%p fre type %d\n", (void*)object, object->type);
+  #endif /* ifdef DEBUG_LOG_GC */
   return object;
 }
 

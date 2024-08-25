@@ -1,12 +1,12 @@
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "chunk.h"
 #include "compiler.h"
+
+#include "chunk.h"
 #include "object.h"
 #include "scanner.h"
 #include "value.h"
@@ -14,8 +14,6 @@
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
 #endif
-
-#define UINT16_COUNT (UINT16_MAX + 1)
 
 typedef struct {
   Token current;
@@ -64,9 +62,9 @@ typedef struct Compiler {
   struct Compiler *enclosing;
   ObjFunction *function;
   FunctionType function_type;
-  Local locals[UINT16_COUNT];
+  Local locals[UINT8_COUNT];
   uint32_t locals_len;
-  Upvalue upvalues[UINT16_COUNT];
+  Upvalue upvalues[UINT8_COUNT];
   uint32_t scope_depth;
 } Compiler;
 
@@ -440,7 +438,8 @@ static void scoped_block() {
   end_scope();
 }
 
-static void init_compiler(Compiler *compiler, const FunctionType function_type) {
+static void init_compiler(Compiler *compiler,
+                          const FunctionType function_type) {
   compiler->enclosing = current_compiler;
 
   compiler->function = NULL;

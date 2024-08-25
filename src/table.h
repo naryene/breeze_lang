@@ -1,8 +1,11 @@
 #ifndef breeze_table_h
 #define breeze_table_h
 
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "object.h"
 #include "common.h"
-#include "value.h"
 
 typedef struct {
   ObjString *key;

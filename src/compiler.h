@@ -2,7 +2,7 @@
 #define breeze_compiler_h
 
 #include "object.h"
-#include "virtual_machine.h"
+#include "common.h"
 
 ObjFunction * compile(const char* source );
 

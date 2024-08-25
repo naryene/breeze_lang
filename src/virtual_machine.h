@@ -1,13 +1,16 @@
 #ifndef breeze_virtual_machine_h
 #define breeze_virtual_machine_h
 
-#include "chunk.h"
+#include <stdint.h>
+
+#include "value.h"
+#include "common.h"
 #include "object.h"
 #include "table.h"
-#include "value.h"
+
 
 #define FRAMES_MAX 64
-#define STACK_MAX (FRAMES_MAX * (UINT8_MAX + 1))
+#define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
 
 typedef struct {
   ObjClosure *closure;

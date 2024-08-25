@@ -1,16 +1,20 @@
-#include "memory.h"
-#include "value.h"
 #include <string.h>
 #include <time.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+#include "virtual_machine.h"
+
+#include "memory.h"
+#include "value.h"
 
 #ifdef DEBUG_TRACE_EXECUTION
 #include "debug.h"
 #endif /* ifdef DEBUG_TRACE_EXECUTION */
 
 #include "compiler.h"
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 VirtualMachine vm;
 
@@ -67,7 +71,8 @@ void init_vm() {
 void free_vm() {
   free_table(&vm.globals);
   free_table(&vm.strings);
-  free_objects();
+  free_objects(vm.objects);
+  init_vm();
 }
 
 void push_stack(Value value) {

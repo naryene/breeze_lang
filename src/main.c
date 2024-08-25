@@ -1,7 +1,8 @@
-#include "common.h"
-#include "virtual_machine.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+
+#include "virtual_machine.h"
 
 static void repl();
 static void run_file(const char *);
