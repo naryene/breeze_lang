@@ -7,7 +7,7 @@
 #include "compiler.h"
 
 #include "chunk.h"
-#include "object.h"
+#include "memory.h"
 #include "scanner.h"
 #include "value.h"
 
@@ -520,26 +520,6 @@ static void function(const FunctionType function_type) {
   }
 }
 
-ObjFunction *compile(const char *source) {
-  init_scanner(source);
-  Compiler compiler;
-  init_compiler(&compiler, TypeScript);
-
-  parser.had_error = false;
-  parser.panic_mode = false;
-
-  advance();
-  while (!match(TokenEof)) {
-    declaration();
-  }
-  if (parser.had_error) {
-    return NULL;
-  }
-  ObjFunction *function = end_compiler();
-
-  return function;
-}
-
 ParseRule rules[] = {
     [TokenLeftParen] = {grouping, call, PrecCall},
     [TokenRightParen] = {NULL, NULL, PrecNone},
@@ -927,5 +907,33 @@ static void declaration() {
 
   if (parser.panic_mode) {
     synchronize();
+  }
+}
+
+ObjFunction *compile(const char *source) {
+  init_scanner(source);
+  Compiler compiler;
+  init_compiler(&compiler, TypeScript);
+
+  parser.had_error = false;
+  parser.panic_mode = false;
+
+  advance();
+  while (!match(TokenEof)) {
+    declaration();
+  }
+  if (parser.had_error) {
+    return NULL;
+  }
+  ObjFunction *function = end_compiler();
+
+  return function;
+}
+
+void mark_compiler_roots() {
+  Compiler *compiler = current_compiler;
+  while (compiler != NULL) {
+    mark_object((Obj *)compiler->function);
+    compiler = compiler->enclosing;
   }
 }

@@ -10,6 +10,7 @@
 static Obj *allocate_object(uint32_t size, ObjType type) {
   Obj *object = (Obj *)reallocate(NULL, 0, size);
   object->type = type;
+  object->is_marked = false;
 
   object->next = vm.objects;
   vm.objects = object;

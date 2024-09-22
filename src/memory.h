@@ -5,6 +5,7 @@
 
 #include "object.h"
 #include "common.h"
+#include "value.h"
 
 #define ALLOCATE(type, new_capacity) \
   (type*)reallocate(NULL, 0, sizeof(type)*new_capacity)
@@ -22,6 +23,8 @@
 #define FREE(type, ptr) reallocate(ptr, sizeof(type), 0)
 
 void* reallocate(void* ptr, size_t old_capacity, size_t new_capacity);
+void mark_object(Obj*);
+void mark_value(Value);
 void collect_garbage();
 void free_objects(Obj *object);
 

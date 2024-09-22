@@ -27,6 +27,9 @@ typedef struct {
   Table strings;
   ObjUpvalue *open_upvalues;
   Obj *objects;
+  uint32_t gray_stack_len;
+  uint32_t gray_stack_capacity;
+  Obj** gray_stack;
 } VirtualMachine;
 
 typedef enum {

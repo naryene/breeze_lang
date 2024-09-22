@@ -1,10 +1,13 @@
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "memory.h"
 
 #include "chunk.h"
 #include "common.h"
+#include "compiler.h"
 #include "object.h"
+#include "value.h"
 #include "virtual_machine.h"
 
 #ifdef DEBUG_LOG_GC
@@ -29,6 +32,80 @@ void *reallocate(void *ptr, size_t old_capacity, size_t new_capacity) {
     exit(1);
   }
   return result;
+}
+
+void mark_object(Obj *object) {
+  if (object == NULL) {
+    return;
+  }
+  if (object->is_marked == true) {
+    return;
+  }
+#ifdef DEBUG_LOG_GC
+  printf("%p mark ", (void *)object);
+  print_value(OBJ_VAL(object));
+  printf("\n");
+#endif // ifdef DEBUG_LOG_GC
+
+  object->is_marked = true;
+
+  if (vm.gray_stack_capacity < vm.gray_stack_len + 1) {
+    vm.gray_stack_capacity = GROW_CAPACITY(vm.gray_stack_capacity);
+    vm.gray_stack =
+        (Obj **)realloc(vm.gray_stack, sizeof(Obj *) * vm.gray_stack_capacity);
+
+    if (vm.gray_stack == NULL) {
+      fprintf(stderr, "Not enough memory for `gray_stack` allocation.");
+      exit(1);
+    }
+  }
+
+  vm.gray_stack[vm.gray_stack_len] = object;
+  vm.gray_stack_len += 1;
+}
+
+void mark_value(Value value) {
+  if (IS_OBJ(value)) {
+    mark_object(AS_OBJ(value));
+  }
+}
+
+void mark_vec(ValueVec *vector) {
+  for (uint32_t i = 0; i < vector->len; i += 1) {
+    mark_value(vector->values[i]);
+  }
+}
+
+static void blacken_object(Obj *object) {
+#ifdef DEBUG_LOG_GC
+  printf("%p blacken", (void *)object);
+  print_value(OBJ_VAL(object));
+  printf("\n");
+#endif /* ifdef DEBUG_LOG_GC */
+
+  switch (object->type) {
+  case ObjClosureType: {
+    ObjClosure *closure = (ObjClosure *)object;
+    mark_object((Obj *)closure->function);
+    for (uint32_t i = 0; i < closure->upvalues_len; i += 1) {
+      mark_object((Obj *)closure->upvalues[i]);
+    }
+  }
+  case ObjFunctionType: {
+    ObjFunction *function = (ObjFunction *)object;
+    mark_object((Obj *)function->name);
+    mark_vec(&function->chunk.constants);
+    break;
+  }
+  case ObjUpvalueType: {
+    mark_value(((ObjUpvalue *)object)->closed);
+    break;
+  }
+  case ObjNativeType:
+  case ObjStringType:
+    break;
+  default:
+  }
 }
 
 static void free_object(Obj *object) {
@@ -64,7 +141,27 @@ static void free_object(Obj *object) {
 
 static void mark_roots() {
   for (Value *slot = vm.stack; slot < vm.stack_ptr; slot += 1) {
-    // mark_value(*slot);
+    mark_value(*slot);
+  }
+
+  for (uint32_t i = 0; i < vm.frames_len; i += 1) {
+    mark_object((Obj *)vm.frames[i].closure);
+  }
+
+  for (ObjUpvalue *upvalue = vm.open_upvalues; upvalue != NULL;
+       upvalue = upvalue->next) {
+    mark_object((Obj *)upvalue);
+  }
+
+  mark_table(&vm.globals);
+  mark_compiler_roots();
+}
+
+static void trace_references() {
+  while (vm.gray_stack_len > 0) {
+    vm.gray_stack_len -= 1;
+    Obj *object = vm.gray_stack[vm.gray_stack_len];
+    blacken_object(object);
   }
 }
 
@@ -74,6 +171,7 @@ void collect_garbage() {
 #endif /* ifdef DEBUG_LOG_GC*/
 
   mark_roots();
+  trace_references();
 
 #ifdef DEBUG_LOG_GC
   printf("-- gc end\n");
@@ -86,4 +184,5 @@ void free_objects(Obj *object) {
     free_object(object);
     object = next;
   }
+  free(vm.gray_stack);
 }
