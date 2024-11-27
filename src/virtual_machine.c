@@ -192,8 +192,8 @@ static InterpretResult check_bool(Value value) {
 }
 
 static void concat() {
-  ObjString *right = AS_STRING(pop_stack());
-  ObjString *left = AS_STRING(pop_stack());
+  ObjString *right = AS_STRING(peek(0));
+  ObjString *left = AS_STRING(peek(1));
 
   uint32_t len = left->len + right->len;
   char *chars = ALLOCATE(char, len + 1);
@@ -202,6 +202,8 @@ static void concat() {
   chars[len] = '\0';
 
   ObjString *result = take_string(chars, len);
+  pop_stack();
+  pop_stack();
   push_stack(OBJ_VAL(result));
 }
 

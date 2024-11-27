@@ -19,7 +19,7 @@
 #define GC_HEAP_GROW_FACTOR 2
 
 void *reallocate(void *ptr, size_t old_capacity, size_t new_capacity) {
-  vm.bytes_allocated = new_capacity - old_capacity;
+  vm.bytes_allocated += new_capacity - old_capacity;
   if (new_capacity > old_capacity) {
 #ifdef DEBUG_STRESS_GC
     collect_garbage();
@@ -199,7 +199,7 @@ static void sweep() {
 void collect_garbage() {
 #ifdef DEBUG_LOG_GC
   printf("-- gc begin\n");
-  site_t bytes_allocated_before = vm.bytes_allocated;
+  size_t bytes_allocated_before = vm.bytes_allocated;
 #endif /* ifdef DEBUG_LOG_GC*/
 
   mark_roots();

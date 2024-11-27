@@ -5,6 +5,7 @@
 #include "object.h"
 
 #include "memory.h"
+#include "value.h"
 #include "virtual_machine.h"
 
 static Obj *allocate_object(uint32_t size, ObjType type) {
@@ -16,7 +17,7 @@ static Obj *allocate_object(uint32_t size, ObjType type) {
   vm.objects = object;
 
   #ifdef DEBUG_LOG_GC
-    printf("%p fre type %d\n", (void*)object, object->type);
+    printf("%p free type %d\n", (void*)object, object->type);
   #endif /* ifdef DEBUG_LOG_GC */
   return object;
 }
@@ -55,7 +56,11 @@ static ObjString *allocate_string(const char *chars, uint32_t len,
   string->len = len;
   string->chars = chars;
   string->hash = hash;
+
+  push_stack(OBJ_VAL(string));
   table_insert(&vm.strings, string, NULL_VAL);
+  pop_stack();
+
   return string;
 }
 

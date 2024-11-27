@@ -5,6 +5,7 @@
 
 #include "memory.h"
 #include "value.h"
+#include "virtual_machine.h"
 
 static void init_line_vec(LineVec *line_vec) {
   line_vec->len = 0;
@@ -82,7 +83,9 @@ void write_chunk(Chunk *chunk, uint8_t byte, uint32_t line) {
 }
 
 uint32_t add_constant(Chunk *chunk, Value value) {
+  push_stack(value);
   write_value_vec(&chunk->constants, value);
+  pop_stack();
   return chunk->constants.len - 1;
 }
 
