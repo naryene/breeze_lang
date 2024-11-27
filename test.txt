@@ -1,3 +1,8 @@
+{
+{{
+
+}}
+}
 fn outer(n) {
   print("entering outer");
   fn middle(){

@@ -415,7 +415,10 @@ static uint8_t argument_list() {
   return args_len;
 }
 
-static void begin_scope() { current_compiler->scope_depth += 1; }
+static void begin_scope() {
+  current_compiler->scope_depth += 1;
+  printf("%d\n", current_compiler->scope_depth);
+}
 
 static void end_scope() {
   current_compiler->scope_depth -= 1;
@@ -457,10 +460,12 @@ static void init_compiler(Compiler *compiler,
         copy_string(parser.previous.start, parser.previous.len);
   }
 
+  Local *local = &current_compiler->locals[current_compiler->locals_len];
   current_compiler->locals_len += 1;
-  Local *local = &current_compiler->locals[current_compiler->locals_len - 1];
   local->depth = 0;
+  
   local->is_captured = false;
+
   if (function_type != TypeFunction) {
     local->name.start = "this";
     local->name.len = 4;

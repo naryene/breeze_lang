@@ -2,6 +2,7 @@
 #define breeze_virtual_machine_h
 
 #include <stdint.h>
+#include <stdio.h>
 
 #include "value.h"
 #include "common.h"
@@ -26,7 +27,11 @@ typedef struct {
   Table globals;
   Table strings;
   ObjUpvalue *open_upvalues;
+
+  size_t bytes_allocated;
+  size_t next_gc;
   Obj *objects;
+
   uint32_t gray_stack_len;
   uint32_t gray_stack_capacity;
   Obj** gray_stack;

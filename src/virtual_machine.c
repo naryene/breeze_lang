@@ -1,9 +1,9 @@
-#include <string.h>
-#include <time.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
+#include <string.h>
+#include <time.h>
 
 #include "virtual_machine.h"
 
@@ -61,6 +61,9 @@ static void define_native(const char *name, NativeFn function) {
 void init_vm() {
   reset_stack();
   vm.open_upvalues = NULL;
+
+  vm.bytes_allocated = 0;
+  vm.next_gc = 1024 * 1024;
   vm.objects = NULL;
 
   vm.gray_stack_len = 0;

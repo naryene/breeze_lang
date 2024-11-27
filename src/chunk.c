@@ -37,7 +37,7 @@ uint32_t get_line(LineVec line_vec, uint32_t inst) {
   int32_t start = 0;
   int32_t end = line_vec.len - 1;
   while (true) {
-    int32_t mid = (start + end) / 2;
+    int32_t mid = start + (end - start) / 2;
     Line *line = &line_vec.lines[mid];
 
     if (start >= end) {

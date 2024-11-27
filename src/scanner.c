@@ -1,5 +1,5 @@
-#include <string.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "scanner.h"
 
@@ -132,14 +132,13 @@ static bool is_alpha(const char c) {
 
 static TokenType check_keyword(uint8_t start, uint8_t len, const char *rest,
                                TokenType type) {
-
   if ((scanner.current - scanner.start == start + len) &&
       memcmp(scanner.start + start, rest, len) == 0) {
     return type;
   }
-
   return TokenIdentifier;
 }
+
 static TokenType identifier_type() {
   switch (scanner.start[0]) {
   case 'c':
