@@ -1,5 +1,5 @@
-#include <stdlib.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #include "chunk.h"
 
@@ -34,16 +34,16 @@ static void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset) {
     line_vec->len += 1;
   }
 }
-uint32_t get_line(LineVec line_vec, uint32_t inst) {
+
+uint32_t get_line(const LineVec * line_vec, uint32_t inst) {
+  if (line_vec.len == 0) {
+    return 0;
+  }
   int32_t start = 0;
   int32_t end = line_vec.len - 1;
-  while (true) {
+  while (start < end) {
     int32_t mid = start + (end - start) / 2;
     Line *line = &line_vec.lines[mid];
-
-    if (start >= end) {
-      return line_vec.lines[start][0];
-    }
 
     if (inst < (*line)[1]) {
       end = mid - 1;
@@ -53,6 +53,7 @@ uint32_t get_line(LineVec line_vec, uint32_t inst) {
       start = mid + 1;
     }
   }
+  return line_vec.lines[start][0];
 }
 void init_chunk(Chunk *chunk) {
   chunk->len = 0;
