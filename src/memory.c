@@ -114,6 +114,7 @@ static void blacken_object(Obj *object) {
   case ObjStringType:
     break;
   default:
+    break;
   }
 }
 

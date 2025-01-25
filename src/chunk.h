@@ -59,7 +59,7 @@ typedef struct {
   ValueVec constants;
 } Chunk;
 
-uint32_t get_line(LineVec lines, uint32_t offset);
+uint32_t get_line(const LineVec *lines, uint32_t offset);
 
 void init_chunk(Chunk *chunk);
 void free_chunk(Chunk *chunk);

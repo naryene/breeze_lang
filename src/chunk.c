@@ -36,24 +36,24 @@ static void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset) {
 }
 
 uint32_t get_line(const LineVec * line_vec, uint32_t inst) {
-  if (line_vec.len == 0) {
+  if (line_vec->len == 0) {
     return 0;
   }
   int32_t start = 0;
-  int32_t end = line_vec.len - 1;
+  int32_t end = line_vec->len - 1;
   while (start < end) {
     int32_t mid = start + (end - start) / 2;
-    Line *line = &line_vec.lines[mid];
+    Line *line = &line_vec->lines[mid];
 
     if (inst < (*line)[1]) {
       end = mid - 1;
-    } else if (inst < line_vec.lines[mid + 1][1]) {
-      return line_vec.lines[mid + 1][0];
+    } else if (inst < line_vec->lines[mid + 1][1]) {
+      return line_vec->lines[mid + 1][0];
     } else {
       start = mid + 1;
     }
   }
-  return line_vec.lines[start][0];
+  return line_vec->lines[start][0];
 }
 void init_chunk(Chunk *chunk) {
   chunk->len = 0;
@@ -62,6 +62,8 @@ void init_chunk(Chunk *chunk) {
   init_line_vec(&chunk->lines);
   init_value_vec(&chunk->constants);
 }
+
+
 
 void free_chunk(Chunk *chunk) {
   FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);

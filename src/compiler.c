@@ -65,7 +65,7 @@ typedef struct Compiler {
   Local locals[UINT8_COUNT];
   uint32_t locals_len;
   Upvalue upvalues[UINT8_COUNT];
-  uint32_t scope_depth;
+  int32_t scope_depth;
 } Compiler;
 
 Parser parser;
@@ -160,18 +160,9 @@ static bool max_constants_error(const uint32_t idx) {
   return false;
 }
 
-// Emits a constant into chunk and  constants array
-static uint32_t emit_constant(const Value value) {
-  uint32_t idx = push_constant(current_chunk(), value, parser.previous.line);
-  if (max_constants_error(idx)) {
-    return 0;
-  }
-  return idx;
-}
-
 // Emits a constant into constant array
-static uint32_t emit_constant_(const Value constant) {
-  uint32_t idx = add_constant(current_chunk(), constant);
+static uint32_t emit_constant_(const Value value) {
+  uint32_t idx = add_constant(current_chunk(), value);
   if (max_constants_error(idx)) {
     return 0;
   }
@@ -185,6 +176,17 @@ static void emit_constant_idx(const uint32_t idx) {
   }
   write_constant_chunk(current_chunk(), idx, parser.previous.line);
 }
+
+// Emits a constant into chunk and  constants array
+static void emit_constant(const Value value) {
+  uint32_t idx = emit_constant_(value);
+  emit_constant_idx(idx);
+  return;
+}
+
+
+
+
 
 static uint32_t emit_name(const Token *name) {
   for (uint32_t idx = 0; idx < current_chunk()->constants.len; idx += 1) {
@@ -271,7 +273,7 @@ static int32_t resolve_local(Compiler *compiler, const Token *name) {
   return -1;
 }
 
-static int32_t add_upvalue(Compiler *compiler, const int32_t index,
+static int32_t add_upvalue(Compiler *compiler, const size_t index,
                            bool is_local) {
   uint32_t upvalues_len = compiler->function->upvalues_len;
 
@@ -417,7 +419,6 @@ static uint8_t argument_list() {
 
 static void begin_scope() {
   current_compiler->scope_depth += 1;
-  printf("%d\n", current_compiler->scope_depth);
 }
 
 static void end_scope() {
@@ -445,7 +446,6 @@ static void init_compiler(Compiler *compiler,
                           const FunctionType function_type) {
   compiler->enclosing = current_compiler;
 
-  compiler->function = NULL;
   compiler->function_type = function_type;
 
   compiler->locals_len = 0;
@@ -498,12 +498,12 @@ static void function(const FunctionType function_type) {
   consume(TokenLeftParen, "Expect '(' after function name.");
   if (!check(TokenRightParen)) {
     while (true) {
-      current_compiler->function->arity += 1;
-      if (current_compiler->function->arity > UINT8_MAX) {
+      compiler.function->arity += 1;
+      if (compiler.function->arity > UINT8_MAX) {
         error_at_current("Can't have more than %d parameters.", UINT8_MAX);
       }
-      uint32_t constant = parse_variable("Expect parameter name.");
-      define_variable(constant);
+      uint32_t param = parse_variable("Expect parameter name.");
+      define_variable(param);
       if (!match(TokenComma)) {
         break;
       }
@@ -515,9 +515,10 @@ static void function(const FunctionType function_type) {
   block();
 
   ObjFunction *func = end_compiler();
+  uint32_t idx = emit_constant_(OBJ_VAL(func));  
 
   emit_byte(OpClosure);
-  emit_constant(OBJ_VAL(func));
+  emit_constant_idx(idx);
 
   for (uint32_t i = 0; i < func->upvalues_len; i += 1) {
     emit_byte(compiler.upvalues[i].is_local ? 1 : 0);

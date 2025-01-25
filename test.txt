@@ -4,9 +4,7 @@ fn outer(n) {
     print("entering middle");
     fn inner() {
       print("entering inner");
-      print(n);
-      print("exiting inner");
-      return n;
+      print("exiting innter");
     }
     print("exiting middle");
     return inner;
@@ -17,6 +15,5 @@ fn outer(n) {
 
 
 let middle = outer(10);
-let inner = middle();
-let n = inner();
 
+middle()();

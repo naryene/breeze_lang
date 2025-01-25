@@ -12,7 +12,7 @@
 
 #ifdef DEBUG_TRACE_EXECUTION
 #include "debug.h"
-#endif /* ifdef DEBUG_TRACE_EXECUTION */
+#endif /* DEBUG_TRACE_EXECUTION */
 
 #include "compiler.h"
 
@@ -38,7 +38,7 @@ static void runtime_error(const char *format, ...) {
     CallFrame *frame = &vm.frames[i];
     ObjFunction *function = frame->closure->function;
     size_t inst = frame->inst_ptr - function->chunk.code - 1;
-    fprintf(stderr, "[line %d] in ", get_line(function->chunk.lines, inst));
+    fprintf(stderr, "[line %d] in ", get_line(&function->chunk.lines, inst));
 
     if (function->name == NULL) {
       fprintf(stderr, "script\n");
@@ -253,6 +253,7 @@ static InterpretResult run() {
   /*** MACROS DEFINITION ***/
 
   while (true) {
+
 #ifdef DEBUG_TRACE_EXECUTION
     printf("        ");
     for (Value *slot = vm.stack; slot < vm.stack_ptr; slot += 1) {
@@ -264,8 +265,7 @@ static InterpretResult run() {
     disassemble_inst(
         &frame->closure->function->chunk,
         (uint32_t)(frame->inst_ptr - frame->closure->function->chunk.code));
-#endif /* ifdef DEBUG_TRACE_EXECUTION                                          \
-        */
+#endif /* DEBUG_TRACE_EXECUTION */
     uint8_t inst;
     switch (inst = READ_BYTE()) {
     case OpConst:

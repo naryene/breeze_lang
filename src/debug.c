@@ -72,8 +72,8 @@ static uint32_t jmp_inst(const char *name, int8_t sign, const Chunk *chunk,
 
 uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   printf("%04d ", offset);
-  uint32_t curr_line = get_line(chunk->lines, offset);
-  uint32_t prev_line = offset > 0 ? get_line(chunk->lines, offset - 1) : 0;
+  uint32_t curr_line = get_line(&chunk->lines, offset);
+  uint32_t prev_line = offset > 0 ? get_line(&chunk->lines, offset - 1) : 0;
   if (offset > 0 && curr_line == prev_line) {
     printf("    | ");
   } else {
@@ -174,6 +174,9 @@ void print_lines(const Chunk *chunk) {
   printf("-----------------------------\n");
 }
 void disassemble_chunk(const Chunk *chunk, const char *name) {
+  if (chunk == NULL) {
+    return;
+  }
   printf("== %s ==\n\n", name);
 
   for (uint32_t offset = 0; offset < chunk->len;) {
