@@ -516,7 +516,6 @@ static void function(const FunctionType function_type) {
 
   ObjFunction *func = end_compiler();
   uint32_t idx = emit_constant_(OBJ_VAL(func));  
-
   emit_byte(OpClosure);
   emit_constant_idx(idx);
 

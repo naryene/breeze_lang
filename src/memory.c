@@ -86,7 +86,7 @@ void mark_vec(ValueVec *vector) {
 
 static void blacken_object(Obj *object) {
 #ifdef DEBUG_LOG_GC
-  printf("%p blacken", (void *)object);
+  printf("%p blacken ", (void *)object);
   print_value(OBJ_VAL(object));
   printf("\n");
 #endif /* ifdef DEBUG_LOG_GC */
@@ -150,12 +150,13 @@ static void free_object(Obj *object) {
 }
 
 static void mark_roots() {
-  for (Value *slot = vm.stack; slot < vm.stack_ptr; slot += 1) {
-    mark_value(*slot);
+  for (Value *stack_slot = vm.stack; stack_slot < vm.stack_ptr;
+       stack_slot += 1) {
+    mark_value(*stack_slot);
   }
 
-  for (uint32_t i = 0; i < vm.frames_len; i += 1) {
-    mark_object((Obj *)vm.frames[i].closure);
+  for (uint32_t frame_idx = 0; frame_idx < vm.frames_len; frame_idx += 1) {
+    mark_object((Obj *)vm.frames[frame_idx].closure);
   }
 
   for (ObjUpvalue *upvalue = vm.open_upvalues; upvalue != NULL;
@@ -184,7 +185,7 @@ static void sweep() {
       previous = object;
       object = object->next;
     } else {
-      Obj *unreached = object;
+      Obj *unreachable = object;
       object = object->next;
       if (previous != NULL) {
         previous->next = object;
@@ -192,7 +193,7 @@ static void sweep() {
         vm.objects = object;
       }
 
-      free_object(unreached);
+      free_object(unreachable);
     }
   }
 }

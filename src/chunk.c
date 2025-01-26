@@ -26,6 +26,7 @@ static void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset) {
         GROW_ARRAY(Line, line_vec->lines, old_capacity, line_vec->capacity);
   }
 
+  // Check if we are inserting a line equals to the last inserted line
   if (line_vec->len > 0 && line == line_vec->lines[line_vec->len - 1][0]) {
     line_vec->lines[line_vec->len - 1][1] = offset;
   } else {
@@ -62,8 +63,6 @@ void init_chunk(Chunk *chunk) {
   init_line_vec(&chunk->lines);
   init_value_vec(&chunk->constants);
 }
-
-
 
 void free_chunk(Chunk *chunk) {
   FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
