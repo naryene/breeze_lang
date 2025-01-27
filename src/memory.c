@@ -5,7 +5,6 @@
 #include "memory.h"
 
 #include "chunk.h"
-#include "common.h"
 #include "compiler.h"
 #include "object.h"
 #include "value.h"
@@ -92,6 +91,12 @@ static void blacken_object(Obj *object) {
 #endif /* ifdef DEBUG_LOG_GC */
 
   switch (object->type) {
+  case ObjClassType:{
+      ObjClass* klass = (ObjClass * ) object;
+      mark_object((Obj *) klass->name);
+      break;
+    }
+
   case ObjClosureType: {
     ObjClosure *closure = (ObjClosure *)object;
     mark_object((Obj *)closure->function);
@@ -113,13 +118,15 @@ static void blacken_object(Obj *object) {
   case ObjNativeType:
   case ObjStringType:
     break;
-  default:
-    break;
   }
 }
 
 static void free_object(Obj *object) {
   switch (object->type) {
+  case ObjClassType: {
+    FREE(ObjClass, object);
+    break;
+  }
   case ObjClosureType: {
     ObjClosure *closure = (ObjClosure *)object;
     FREE_ARRAY(ObjUpvalue *, closure->upvalues, closure->upvalues_len);

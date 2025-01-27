@@ -1,6 +1,6 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
 
 #include "object.h"
 
@@ -16,10 +16,16 @@ static Obj *allocate_object(uint32_t size, ObjType type) {
   object->next = vm.objects;
   vm.objects = object;
 
-  #ifdef DEBUG_LOG_GC
-    printf("%p free type %d\n", (void*)object, object->type);
-  #endif /* ifdef DEBUG_LOG_GC */
+#ifdef DEBUG_LOG_GC
+  printf("%p free type %d\n", (void *)object, object->type);
+#endif /* ifdef DEBUG_LOG_GC */
   return object;
+}
+
+ObjClass *new_class(ObjString *name) {
+  ObjClass *klass = ALLOCATE_OBJ(ObjClass, ObjClassType);
+  klass->name = name;
+  return klass;
 }
 
 ObjClosure *new_closure(ObjFunction *function) {
@@ -99,9 +105,9 @@ ObjString *copy_string(const char *chars, uint32_t len) {
   return allocate_string(heap_chars, len, hash);
 }
 
-ObjUpvalue *new_upvalue(Value *slot) {
+ObjUpvalue *new_upvalue(Value *stack_slot) {
   ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, ObjUpvalueType);
-  upvalue->location = slot;
+  upvalue->location = stack_slot;
   upvalue->closed = NULL_VAL;
   upvalue->next = NULL;
   return upvalue;
@@ -117,6 +123,10 @@ void print_function(ObjFunction *function) {
 
 void print_object(Value value) {
   switch (OBJ_TYPE(value)) {
+  case ObjClassType: {
+    printf("%s", AS_CLASS(value)->name->chars);
+    break;
+  }
   case ObjClosureType: {
     print_function(AS_CLOSURE(value)->function);
     break;

@@ -1,5 +1,3 @@
-make target
-make clean
-clear
-./target test.txt
+cmake --build build
+build/breeze test.txt
 
