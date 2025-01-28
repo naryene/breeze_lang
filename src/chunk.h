@@ -3,9 +3,8 @@
 
 #include <stdint.h>
 
-#include "value.h"
 #include "common.h"
-
+#include "value.h"
 
 typedef enum {
   OpRet,
@@ -37,6 +36,7 @@ typedef enum {
   OpJmp,
   OpClosure,
   OpCall,
+  OpClass,
 } OpCode;
 
 /***

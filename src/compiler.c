@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -141,6 +142,14 @@ static bool match(TokenType type) {
   return true;
 }
 
+static bool max_constants_error(const uint32_t idx) {
+  if (idx > UINT16_MAX) {
+    error("Too many constants in one chunk.");
+    return true;
+  }
+  return false;
+}
+
 static void emit_byte(uint8_t byte) {
   write_chunk(current_chunk(), byte, parser.previous.line);
 }
@@ -152,39 +161,40 @@ static void emit_word(const uint8_t byte1, const uint8_t byte2) {
 
 static void emit_return() { emit_word(OpNull, OpRet); }
 
-static bool max_constants_error(const uint32_t idx) {
-  if (idx > UINT16_MAX) {
-    error("Too many constants in one chunk.");
-    return true;
-  }
-  return false;
-}
-
-// Emits a constant into constant array
-static uint32_t emit_constant_(const Value value) {
+/*
+ * Emits a constant into constant array
+ */
+static uint32_t emit_constant_array(const Value value) {
   uint32_t idx = add_constant(current_chunk(), value);
   if (max_constants_error(idx)) {
-    return 0;
+    exit(1);
   }
   return idx;
 }
 
-// Emits a constant into chunk
-static void emit_constant_idx(const uint32_t idx) {
+/*
+ * Emits a constant into chunk
+ */
+static void emit_idx(const uint32_t idx) {
   if (max_constants_error(idx)) {
     return;
   }
   write_constant_chunk(current_chunk(), idx, parser.previous.line);
 }
 
-// Emits a constant into chunk and  constants array
+/* 
+ * Emits a constant into chunk and  constants array
+ */
 static void emit_constant(const Value value) {
-  uint32_t idx = emit_constant_(value);
-  emit_constant_idx(idx);
+  uint32_t idx = emit_constant_array(value);
+  emit_idx(idx);
   return;
 }
 
-
+static void emit_byte_idx(const uint8_t op, const uint32_t idx) {
+  emit_byte(op);
+  emit_idx(idx);
+}
 
 
 
@@ -197,7 +207,7 @@ static uint32_t emit_name(const Token *name) {
     }
   }
   ObjString *string = copy_string(name->start, name->len);
-  return emit_constant_(OBJ_VAL(string));
+  return emit_constant_array(OBJ_VAL(string));
 }
 
 static uint32_t emit_jmp(uint8_t inst) {
@@ -336,7 +346,7 @@ static void named_variable(const Token *name, bool can_assign) {
   } else {
     emit_byte(get_op);
   }
-  emit_constant_idx(arg);
+  emit_idx(arg);
 }
 
 static void add_local(const Token *name) {
@@ -396,7 +406,7 @@ static void define_variable(uint32_t variable) {
     return;
   }
   emit_byte(OpDefineGlobal);
-  emit_constant_idx(variable);
+  emit_idx(variable);
 }
 
 static uint8_t argument_list() {
@@ -417,9 +427,7 @@ static uint8_t argument_list() {
   return args_len;
 }
 
-static void begin_scope() {
-  current_compiler->scope_depth += 1;
-}
+static void begin_scope() { current_compiler->scope_depth += 1; }
 
 static void end_scope() {
   current_compiler->scope_depth -= 1;
@@ -463,7 +471,7 @@ static void init_compiler(Compiler *compiler,
   Local *local = &current_compiler->locals[current_compiler->locals_len];
   current_compiler->locals_len += 1;
   local->depth = 0;
-  
+
   local->is_captured = false;
 
   if (function_type != TypeFunction) {
@@ -515,13 +523,13 @@ static void function(const FunctionType function_type) {
   block();
 
   ObjFunction *func = end_compiler();
-  uint32_t idx = emit_constant_(OBJ_VAL(func));  
+  uint32_t idx = emit_constant_array(OBJ_VAL(func));
   emit_byte(OpClosure);
-  emit_constant_idx(idx);
+  emit_idx(idx);
 
   for (uint32_t i = 0; i < func->upvalues_len; i += 1) {
     emit_byte(compiler.upvalues[i].is_local ? 1 : 0);
-    emit_constant_idx(compiler.upvalues[i].index);
+    emit_idx(compiler.upvalues[i].index);
   }
 }
 
@@ -880,6 +888,17 @@ static void block() {
   consume(TokenRightBrace, "Expect '}' after block.");
 }
 
+static void class_declaration() {
+  consume(TokenIdentifier, "Expect class name");
+  uint32_t class_name_idx = emit_name(&parser.previous);
+
+  declare_variable();
+  emit_byte_idx(OpClass, class_name_idx);
+
+  consume(TokenLeftBrace, "Expect '{' before class body.");
+  consume(TokenRightBrace, "Expect '}' before class body.");
+}
+
 static void fn_declaration() {
   uint32_t variable = parse_variable("Expect function name.");
   init_variable();
@@ -902,7 +921,9 @@ static void var_declaration() {
 }
 
 static void declaration() {
-  if (match(TokenFn)) {
+  if (match(TokenClass)) {
+    class_declaration();
+  } else if (match(TokenFn)) {
     fn_declaration();
   } else if (match(TokenLet)) {
     var_declaration();
