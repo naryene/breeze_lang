@@ -1,19 +1,6 @@
-fn outer(n) {
-  print("entering outer");
-  fn middle(){
-    print("entering middle");
-    fn inner() {
-      print("entering inner");
-      print("exiting innter");
-    }
-    print("exiting middle");
-    return inner;
-  }
-  print("exiting outer");
-  return middle;
+let x = 10;
+{
+  let x = 5;
+  print(x);
 }
-
-
-let middle = outer(10);
-
-middle()();
+print(x);

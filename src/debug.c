@@ -4,6 +4,7 @@
 
 #include "debug.h"
 
+#include "chunk.h"
 #include "object.h"
 
 static uint32_t simple_inst(const char *name, uint32_t offset) {
@@ -84,6 +85,9 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   switch (inst) {
   case OpRet:
     return simple_inst("OpRet", offset);
+  case OpClass:
+    constant_inst("OpClass", chunk, &offset, NULL);
+    return offset;
   case OpClosure: {
     offset += 1;
     uint32_t constant_idx;

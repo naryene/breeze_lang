@@ -8,6 +8,7 @@
 #include "virtual_machine.h"
 
 #include "memory.h"
+#include "object.h"
 #include "value.h"
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -256,7 +257,8 @@ static InterpretResult run() {
 
 #ifdef DEBUG_TRACE_EXECUTION
     printf("        ");
-    for (Value *stack_slot = vm.stack; stack_slot < vm.stack_ptr; stack_slot += 1) {
+    for (Value *stack_slot = vm.stack; stack_slot < vm.stack_ptr;
+         stack_slot += 1) {
       printf("[ ");
       print_value(*stack_slot);
       printf(" ]");
@@ -438,6 +440,10 @@ static InterpretResult run() {
     case OpCloseUpvalue: {
       close_upvalues(vm.stack_ptr - 1);
       pop_stack();
+      break;
+    }
+    case OpClass: {
+      push_stack(OBJ_VAL(new_class(READ_STRING())));
       break;
     }
     case OpRet: {
