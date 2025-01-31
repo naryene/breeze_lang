@@ -1,6 +1,4 @@
-let x = 10;
-{
-  let x = 5;
-  print(x);
+class Class {
+
 }
-print(x);
+print Class;

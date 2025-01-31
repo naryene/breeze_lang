@@ -249,6 +249,7 @@ static void and_and_(bool can_assign);
 static void or_or_(bool can_assign);
 
 static void var_declaration();
+static void class_declaration();
 static void fn_declaration();
 static void declaration();
 static void block();
@@ -891,9 +892,11 @@ static void block() {
 static void class_declaration() {
   consume(TokenIdentifier, "Expect class name");
   uint32_t class_name_idx = emit_name(&parser.previous);
-
   declare_variable();
+
   emit_byte_idx(OpClass, class_name_idx);
+  define_variable(class_name_idx);
+
 
   consume(TokenLeftBrace, "Expect '{' before class body.");
   consume(TokenRightBrace, "Expect '}' before class body.");
