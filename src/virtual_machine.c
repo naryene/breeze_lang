@@ -141,8 +141,14 @@ static bool call(ObjClosure *closure, uint8_t args_len) {
 static bool call_value(Value callee, uint8_t args_len) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
-    case ObjClosureType:
+    case ObjClassType: {
+      ObjClass *klass = (ObjClass*)AS_OBJ(callee);
+      vm.stack_ptr[-(args_len+1)] = OBJ_VAL(new_instance(klass));
+      return true;
+    }
+    case ObjClosureType: {
       return call(AS_CLOSURE(callee), args_len);
+    }
     case ObjNativeType: {
       NativeFn native = AS_NATIVE(callee);
       Value result = native(args_len, vm.stack_ptr - args_len);

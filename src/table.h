@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "object.h"
 #include "common.h"
+#include "value.h"
 
 typedef struct {
   ObjString *key;

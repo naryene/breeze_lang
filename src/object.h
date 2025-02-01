@@ -5,6 +5,7 @@
 
 #include "chunk.h"
 #include "common.h"
+#include "table.h"
 #include "value.h"
 
 /* Allocates memory for an object and sets its type
@@ -24,13 +25,14 @@
  */
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
-
+#define IS_INSTANCE(value) is_obj_type(value, ObjInstanceType)
 #define IS_CLASS(value) is_obj_type(value, ObjClassType)
 #define IS_CLOSURE(value) is_obj_type(value, ObjClosureType)
 #define IS_FUNCTION(value) is_obj_type(value, ObjFunctionType)
 #define IS_NATIVE(value) is_obj_type(value, ObjNativeType)
 #define IS_STRING(value) is_obj_type(value, ObjStringType)
 
+#define AS_INSTANCE(value) ((ObjInstance *)AS_OBJ(value))
 #define AS_CLASS(value) ((ObjClass *)AS_OBJ(value))
 #define AS_CLOSURE(value) ((ObjClosure *)AS_OBJ(value))
 #define AS_FUNCTION(value) ((ObjFunction *)AS_OBJ(value))
@@ -44,16 +46,17 @@ typedef enum {
   ObjStringType,
   ObjClosureType,
   ObjUpvalueType,
-  ObjClassType
+  ObjClassType,
+  ObjInstanceType,
 } ObjType;
 
-struct Obj {
+typedef struct Obj {
   ObjType type;
   bool is_marked;
   struct Obj *next;
-};
+} Obj;
 
-typedef struct {
+typedef struct ObjFunction {
   Obj obj;
   int32_t arity;
   uint32_t upvalues_len;
@@ -63,17 +66,17 @@ typedef struct {
 
 typedef Value (*NativeFn)(int32_t args_len, Value *args);
 
-typedef struct {
+typedef struct ObjNative {
   Obj obj;
   NativeFn function;
 } ObjNative;
 
-struct ObjString {
+typedef struct ObjString {
   Obj obj;
   uint32_t len;
   const char *chars;
   uint32_t hash;
-};
+} ObjString;
 
 typedef struct ObjUpvalue {
   Obj obj;
@@ -82,17 +85,29 @@ typedef struct ObjUpvalue {
   struct ObjUpvalue *next;
 } ObjUpvalue;
 
-typedef struct {
+typedef struct ObjClosure {
   Obj obj;
   ObjFunction *function;
   ObjUpvalue **upvalues;
   uint32_t upvalues_len;
 } ObjClosure;
 
-typedef struct {
+typedef struct ObjClass {
   Obj obj;
   ObjString *name;
 } ObjClass;
+
+typedef struct ObjInstance {
+  Obj obj;
+  ObjClass *klass;
+  Table fields;
+} ObjInstance;
+
+/* Creates a new instance object
+ * @param class (klass!): A pointer to a class object
+ * @return: Pointer to the newly created instance
+ */
+ObjInstance *new_instance(ObjClass* klass);
 
 /* Creates a new class object
  * @param name: A pointer to a string object

@@ -7,6 +7,7 @@
 #include "chunk.h"
 #include "compiler.h"
 #include "object.h"
+#include "table.h"
 #include "value.h"
 #include "virtual_machine.h"
 
@@ -84,6 +85,7 @@ void mark_vec(ValueVec *vector) {
 }
 
 static void blacken_object(Obj *object) {
+
 #ifdef DEBUG_LOG_GC
   printf("%p blacken ", (void *)object);
   print_value(OBJ_VAL(object));
@@ -91,11 +93,17 @@ static void blacken_object(Obj *object) {
 #endif /* ifdef DEBUG_LOG_GC */
 
   switch (object->type) {
-  case ObjClassType:{
-      ObjClass* klass = (ObjClass * ) object;
-      mark_object((Obj *) klass->name);
-      break;
-    }
+  case ObjInstanceType: {
+    ObjInstance *instance = (ObjInstance *)object;
+    mark_object((Obj *)instance->klass);
+    mark_table(&instance->fields);
+    break;
+  }
+  case ObjClassType: {
+    ObjClass *klass = (ObjClass *)object;
+    mark_object((Obj *)klass->name);
+    break;
+  }
 
   case ObjClosureType: {
     ObjClosure *closure = (ObjClosure *)object;
@@ -105,16 +113,19 @@ static void blacken_object(Obj *object) {
     }
     break;
   }
+
   case ObjFunctionType: {
     ObjFunction *function = (ObjFunction *)object;
     mark_object((Obj *)function->name);
     mark_vec(&function->chunk.constants);
     break;
   }
+
   case ObjUpvalueType: {
     mark_value(((ObjUpvalue *)object)->closed);
     break;
   }
+
   case ObjNativeType:
   case ObjStringType:
     break;
@@ -123,6 +134,12 @@ static void blacken_object(Obj *object) {
 
 static void free_object(Obj *object) {
   switch (object->type) {
+  case ObjInstanceType: {
+    ObjInstance *instance = (ObjInstance *)object;
+    free_table(&instance->fields);
+    FREE(ObjInstance, object);
+    break;
+  }
   case ObjClassType: {
     FREE(ObjClass, object);
     break;

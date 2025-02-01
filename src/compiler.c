@@ -173,7 +173,7 @@ static uint32_t emit_constant_array(const Value value) {
 }
 
 /*
- * Emits a constant into chunk
+ * Emits a constant as an index into chunk
  */
 static void emit_idx(const uint32_t idx) {
   if (max_constants_error(idx)) {
@@ -581,19 +581,19 @@ static ParseRule *get_rule(TokenType type) { return &rules[type]; }
 
 static void parse_precedence(Precedence precedence) {
   advance();
-  ParseFn prefix_rule = get_rule(parser.previous.type)->prefix;
-  if (prefix_rule == NULL) {
+  ParseFn handle_prefix = get_rule(parser.previous.type)->prefix;
+  if (handle_prefix == NULL) {
     error("Expect expression.");
     return;
   }
 
   bool can_assign = precedence <= PrecAssignment;
-  prefix_rule(can_assign);
+  handle_prefix(can_assign);
 
   while (precedence <= get_rule(parser.current.type)->precedence) {
     advance();
-    ParseFn infix_rule = get_rule(parser.previous.type)->infix;
-    infix_rule(can_assign);
+    ParseFn handle_infix = get_rule(parser.previous.type)->infix;
+    handle_infix(can_assign);
   }
 
   if (can_assign && match(TokenEqual)) {

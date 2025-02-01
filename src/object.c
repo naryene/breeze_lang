@@ -5,7 +5,6 @@
 #include "object.h"
 
 #include "memory.h"
-#include "value.h"
 #include "virtual_machine.h"
 
 static Obj *allocate_object(uint32_t size, ObjType type) {
@@ -22,6 +21,12 @@ static Obj *allocate_object(uint32_t size, ObjType type) {
   return object;
 }
 
+ObjInstance *new_instance(ObjClass *klass) {
+  ObjInstance *instance = ALLOCATE_OBJ(ObjInstance, ObjInstanceType);
+  instance->klass = klass;
+  init_table(&instance->fields);
+  return instance;
+}
 ObjClass *new_class(ObjString *name) {
   ObjClass *klass = ALLOCATE_OBJ(ObjClass, ObjClassType);
   klass->name = name;
@@ -123,8 +128,12 @@ void print_function(ObjFunction *function) {
 
 void print_object(Value value) {
   switch (OBJ_TYPE(value)) {
+  case ObjInstanceType: {
+    printf("instance of <class %s>", AS_INSTANCE(value)->klass->name->chars);
+    break;
+  }
   case ObjClassType: {
-    printf("%s", AS_CLASS(value)->name->chars);
+    printf("<class %s>", AS_CLASS(value)->name->chars);
     break;
   }
   case ObjClosureType: {

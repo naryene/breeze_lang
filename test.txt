@@ -1,4 +1,6 @@
 class Class {
 
 }
-print Class;
+let object = Class();
+
+print object;
