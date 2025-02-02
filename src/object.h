@@ -107,7 +107,7 @@ typedef struct ObjInstance {
  * @param class (klass!): A pointer to a class object
  * @return: Pointer to the newly created instance
  */
-ObjInstance *new_instance(ObjClass* klass);
+ObjInstance *new_instance(ObjClass *klass);
 
 /* Creates a new class object
  * @param name: A pointer to a string object

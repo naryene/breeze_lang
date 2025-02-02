@@ -1,6 +1,6 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 
 #include "virtual_machine.h"
 
@@ -41,7 +41,7 @@ static void repl() {
 static void run_file(const char *path) {
   const char *source = read_file(path);
   InterpretResult result = interpret(source);
-  free((void*) source);
+  free((void *)source);
 
   if (result == InterpretCompileErr) {
     exit(65);
