@@ -182,7 +182,7 @@ static void emit_idx(const uint32_t idx) {
   write_constant_chunk(current_chunk(), idx, parser.previous.line);
 }
 
-/* 
+/*
  * Emits a constant into chunk and  constants array
  */
 static void emit_constant(const Value value) {
@@ -195,8 +195,6 @@ static void emit_byte_idx(const uint8_t op, const uint32_t idx) {
   emit_byte(op);
   emit_idx(idx);
 }
-
-
 
 static uint32_t emit_name(const Token *name) {
   for (uint32_t idx = 0; idx < current_chunk()->constants.len; idx += 1) {
@@ -896,7 +894,6 @@ static void class_declaration() {
 
   emit_byte_idx(OpClass, class_name_idx);
   define_variable(class_name_idx);
-
 
   consume(TokenLeftBrace, "Expect '{' before class body.");
   consume(TokenRightBrace, "Expect '}' before class body.");

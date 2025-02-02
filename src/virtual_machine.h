@@ -4,11 +4,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "value.h"
 #include "common.h"
 #include "object.h"
 #include "table.h"
-
+#include "value.h"
 
 #define FRAMES_MAX 64
 #define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
@@ -34,7 +33,7 @@ typedef struct {
 
   uint32_t gray_stack_len;
   uint32_t gray_stack_capacity;
-  Obj** gray_stack;
+  Obj **gray_stack;
 } VirtualMachine;
 
 typedef enum {

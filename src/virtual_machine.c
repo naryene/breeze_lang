@@ -142,8 +142,8 @@ static bool call_value(Value callee, uint8_t args_len) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
     case ObjClassType: {
-      ObjClass *klass = (ObjClass*)AS_OBJ(callee);
-      vm.stack_ptr[-(args_len+1)] = OBJ_VAL(new_instance(klass));
+      ObjClass *klass = (ObjClass *)AS_OBJ(callee);
+      vm.stack_ptr[-(args_len + 1)] = OBJ_VAL(new_instance(klass));
       return true;
     }
     case ObjClosureType: {

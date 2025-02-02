@@ -36,7 +36,7 @@ static void write_line_vec(LineVec *line_vec, uint32_t line, uint32_t offset) {
   }
 }
 
-uint32_t get_line(const LineVec * line_vec, uint32_t inst) {
+uint32_t get_line(const LineVec *line_vec, uint32_t inst) {
   if (line_vec->len == 0) {
     return 0;
   }
