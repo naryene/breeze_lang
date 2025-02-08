@@ -123,7 +123,7 @@ static void advance() {
   }
 }
 
-static void consume(TokenType type, const char *message) {
+static void consume_token(TokenType type, const char *message) {
   if (parser.current.type == type) {
     advance();
     return;
@@ -132,10 +132,10 @@ static void consume(TokenType type, const char *message) {
   error_at_current(message);
 }
 
-static bool check(TokenType type) { return parser.current.type == type; }
+static bool check_token(TokenType type) { return parser.current.type == type; }
 
-static bool match(TokenType type) {
-  if (!check(type)) {
+static bool match_token(TokenType type) {
+  if (!check_token(type)) {
     return false;
   }
   advance();
@@ -340,7 +340,7 @@ static void named_variable(const Token *name, bool can_assign) {
     set_op = OpSetGlobal;
   }
 
-  if (can_assign && match(TokenEqual)) {
+  if (can_assign && match_token(TokenEqual)) {
     expression();
     emit_byte(set_op);
   } else {
@@ -383,7 +383,7 @@ static void declare_variable() {
 }
 
 static uint32_t parse_variable(const char *message) {
-  consume(TokenIdentifier, message);
+  consume_token(TokenIdentifier, message);
 
   declare_variable();
   if (current_compiler->scope_depth > 0) {
@@ -411,19 +411,19 @@ static void define_variable(uint32_t variable) {
 
 static uint8_t argument_list() {
   uint8_t args_len = 0;
-  if (!check(TokenRightParen)) {
+  if (!check_token(TokenRightParen)) {
     while (true) {
       expression();
       if (args_len == UINT8_MAX) {
         error("Can't have more than %d arguments.", UINT8_MAX);
       }
       args_len += 1;
-      if (!match(TokenComma)) {
+      if (!match_token(TokenComma)) {
         break;
       }
     }
   }
-  consume(TokenRightParen, "Expect ')' after arguments.");
+  consume_token(TokenRightParen, "Expect ')' after arguments.");
   return args_len;
 }
 
@@ -503,8 +503,8 @@ static void function(const FunctionType function_type) {
   init_compiler(&compiler, function_type);
   begin_scope();
 
-  consume(TokenLeftParen, "Expect '(' after function name.");
-  if (!check(TokenRightParen)) {
+  consume_token(TokenLeftParen, "Expect '(' after function name.");
+  if (!check_token(TokenRightParen)) {
     while (true) {
       compiler.function->arity += 1;
       if (compiler.function->arity > UINT8_MAX) {
@@ -512,14 +512,14 @@ static void function(const FunctionType function_type) {
       }
       uint32_t param = parse_variable("Expect parameter name.");
       define_variable(param);
-      if (!match(TokenComma)) {
+      if (!match_token(TokenComma)) {
         break;
       }
     }
   }
 
-  consume(TokenRightParen, "Expect ')' after parameters.");
-  consume(TokenLeftBrace, "Expect '{' before function body.");
+  consume_token(TokenRightParen, "Expect ')' after parameters.");
+  consume_token(TokenLeftBrace, "Expect '{' before function body.");
   block();
 
   ObjFunction *func = end_compiler();
@@ -595,14 +595,14 @@ static void parse_precedence(Precedence precedence) {
     handle_infix(can_assign);
   }
 
-  if (can_assign && match(TokenEqual)) {
+  if (can_assign && match_token(TokenEqual)) {
     error("Invalid assignment target.");
   }
 }
 
 static void grouping(bool can_assign) {
   expression();
-  consume(TokenRightParen, "Expect ')' after expression.");
+  consume_token(TokenRightParen, "Expect ')' after expression.");
 }
 
 static void number(bool can_assign) {
@@ -659,10 +659,10 @@ static void or_or_(bool can_assign) {
 }
 
 static void dot(bool can_assign) {
-  consume(TokenIdentifier, "Expect property name after '.'.");
+  consume_token(TokenIdentifier, "Expect property name after '.'.");
   uint32_t name_idx = emit_name(&parser.previous);
 
-  if (can_assign && match(TokenEqual)) {
+  if (can_assign && match_token(TokenEqual)) {
     expression();
     emit_byte_idx(OpSetProperty, name_idx);
   } else {
@@ -773,7 +773,7 @@ static void expression() { parse_precedence(PrecAssignment); }
 
 static void print_statement() {
   expression();
-  consume(TokenSemiColon, "Expect ';' after value.");
+  consume_token(TokenSemiColon, "Expect ';' after value.");
   emit_byte(OpPrint);
 }
 
@@ -781,11 +781,11 @@ static void return_statement() {
   if (current_compiler->function_type == TypeScript) {
     error("Can't return from top-level code.");
   }
-  if (match(TokenSemiColon)) {
+  if (match_token(TokenSemiColon)) {
     emit_return();
   } else {
     expression();
-    consume(TokenSemiColon, "Expect ';' after return value.");
+    consume_token(TokenSemiColon, "Expect ';' after return value.");
     emit_byte(OpRet);
   }
 }
@@ -795,7 +795,7 @@ static void if_statement() {
 
   uint32_t then_jmp = emit_jmp(OpJmpIfFalse);
   emit_byte(OpPop);
-  consume(TokenLeftBrace, "Expect '{' after 'if' statement.");
+  consume_token(TokenLeftBrace, "Expect '{' after 'if' statement.");
   scoped_block();
 
   uint32_t else_jmp = emit_jmp(OpJmp);
@@ -803,8 +803,8 @@ static void if_statement() {
   patch_jmp(then_jmp);
   emit_byte(OpPop);
 
-  if (match(TokenElse)) {
-    consume(TokenLeftBrace, "Expect '{' after 'else' statement.");
+  if (match_token(TokenElse)) {
+    consume_token(TokenLeftBrace, "Expect '{' after 'else' statement.");
     scoped_block();
   }
 
@@ -817,7 +817,7 @@ static void while_statement() {
 
   uint32_t exit_jmp = emit_jmp(OpJmpIfFalse);
   emit_byte(OpPop);
-  consume(TokenLeftBrace, "Expect '{' after 'while' statement.");
+  consume_token(TokenLeftBrace, "Expect '{' after 'while' statement.");
   scoped_block();
   emit_loop(loop_start);
 
@@ -827,9 +827,9 @@ static void while_statement() {
 
 static void for_statement() {
   begin_scope();
-  consume(TokenLeftParen, "Expect '(' after 'for'.");
-  if (match(TokenSemiColon)) {
-  } else if (match(TokenLet)) {
+  consume_token(TokenLeftParen, "Expect '(' after 'for'.");
+  if (match_token(TokenSemiColon)) {
+  } else if (match_token(TokenLet)) {
     var_declaration();
   } else {
     expression_statement();
@@ -837,27 +837,27 @@ static void for_statement() {
 
   uint32_t loop_start = current_chunk()->len;
   int32_t exit_jmp = -1;
-  if (!match(TokenSemiColon)) {
+  if (!match_token(TokenSemiColon)) {
     expression();
-    consume(TokenSemiColon, "Expect ';' after loop condition.");
+    consume_token(TokenSemiColon, "Expect ';' after loop condition.");
 
     exit_jmp = emit_jmp(OpJmpIfFalse);
     emit_byte(OpPop);
   }
 
-  if (!match(TokenRightParen)) {
+  if (!match_token(TokenRightParen)) {
     uint32_t body_jmp = emit_jmp(OpJmp);
     uint32_t increment_start = current_chunk()->len;
     expression();
     emit_byte(OpPop);
-    consume(TokenRightParen, "Expect ')' after 'for' clauses.");
+    consume_token(TokenRightParen, "Expect ')' after 'for' clauses.");
 
     emit_loop(loop_start);
     loop_start = increment_start;
     patch_jmp(body_jmp);
   }
 
-  consume(TokenLeftBrace, "Expect '{' after 'for' statement.");
+  consume_token(TokenLeftBrace, "Expect '{' after 'for' statement.");
   block();
   emit_loop(loop_start);
 
@@ -871,22 +871,22 @@ static void for_statement() {
 
 static void expression_statement() {
   expression();
-  consume(TokenSemiColon, "Expect ';' after value.");
+  consume_token(TokenSemiColon, "Expect ';' after value.");
   emit_byte(OpPop);
 }
 
 static void statement() {
-  if (match(TokenPrint)) {
+  if (match_token(TokenPrint)) {
     print_statement();
-  } else if (match(TokenIf)) {
+  } else if (match_token(TokenIf)) {
     if_statement();
-  } else if (match(TokenReturn)) {
+  } else if (match_token(TokenReturn)) {
     return_statement();
-  } else if (match(TokenWhile)) {
+  } else if (match_token(TokenWhile)) {
     while_statement();
-  } else if (match(TokenFor)) {
+  } else if (match_token(TokenFor)) {
     for_statement();
-  } else if (match(TokenLeftBrace)) {
+  } else if (match_token(TokenLeftBrace)) {
     scoped_block();
   } else {
     expression_statement();
@@ -894,22 +894,25 @@ static void statement() {
 }
 
 static void block() {
-  while (!check(TokenRightBrace) && !check(TokenEof)) {
+  while (!check_token(TokenRightBrace) && !check_token(TokenEof)) {
     declaration();
   }
-  consume(TokenRightBrace, "Expect '}' after block.");
+  consume_token(TokenRightBrace, "Expect '}' after block.");
 }
 
 static void class_declaration() {
-  consume(TokenIdentifier, "Expect class name");
+  consume_token(TokenIdentifier, "Expect class name");
   uint32_t class_name_idx = emit_name(&parser.previous);
   declare_variable();
 
   emit_byte_idx(OpClass, class_name_idx);
   define_variable(class_name_idx);
 
-  consume(TokenLeftBrace, "Expect '{' before class body.");
-  consume(TokenRightBrace, "Expect '}' before class body.");
+  consume_token(TokenLeftBrace, "Expect '{' before class body.");
+  while (!check_token(TokenRightBrace) && !check_token(TokenEof)) {
+    method();
+  }
+  consume_token(TokenRightBrace, "Expect '}' after class body.");
 }
 
 static void fn_declaration() {
@@ -922,23 +925,23 @@ static void fn_declaration() {
 static void var_declaration() {
   uint32_t variable = parse_variable("Expect variable name.");
 
-  if (match(TokenEqual)) {
+  if (match_token(TokenEqual)) {
     expression();
   } else {
     emit_byte(OpNull);
   }
 
-  consume(TokenSemiColon, "Expect ';' after variable declaration.");
+  consume_token(TokenSemiColon, "Expect ';' after variable declaration.");
 
   define_variable(variable);
 }
 
 static void declaration() {
-  if (match(TokenClass)) {
+  if (match_token(TokenClass)) {
     class_declaration();
-  } else if (match(TokenFn)) {
+  } else if (match_token(TokenFn)) {
     fn_declaration();
-  } else if (match(TokenLet)) {
+  } else if (match_token(TokenLet)) {
     var_declaration();
   } else {
     statement();
@@ -958,7 +961,7 @@ ObjFunction *compile(const char *source) {
   parser.panic_mode = false;
 
   advance();
-  while (!match(TokenEof)) {
+  while (!match_token(TokenEof)) {
     declaration();
   }
   if (parser.had_error) {
