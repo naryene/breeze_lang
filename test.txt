@@ -1,6 +1,8 @@
-class Class {
+class Human {
 
 }
-let object = Class();
 
-print object;
+let employee = Human();
+employee.name = "nassim";
+
+ print("The employee name is "+ employee.name);

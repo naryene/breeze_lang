@@ -245,6 +245,7 @@ static void string(bool can_assign);
 static void variable(bool can_assign);
 static void and_and_(bool can_assign);
 static void or_or_(bool can_assign);
+static void dot(bool can_assign);
 
 static void var_declaration();
 static void class_declaration();
@@ -538,7 +539,7 @@ ParseRule rules[] = {
     [TokenLeftBrace] = {NULL, NULL, PrecNone},
     [TokenRightBrace] = {NULL, NULL, PrecNone},
     [TokenComma] = {NULL, NULL, PrecNone},
-    [TokenDot] = {NULL, NULL, PrecNone},
+    [TokenDot] = {NULL, dot, PrecCall},
     [TokenMinus] = {unary, binary, PrecTerm},
     [TokenPlus] = {NULL, binary, PrecTerm},
     [TokenSemiColon] = {NULL, NULL, PrecNone},
@@ -655,6 +656,18 @@ static void or_or_(bool can_assign) {
 
   parse_precedence(PrecOrOr);
   patch_jmp(end_jmp);
+}
+
+static void dot(bool can_assign) {
+  consume(TokenIdentifier, "Expect property name after '.'.");
+  uint32_t name_idx = emit_name(&parser.previous);
+
+  if (can_assign && match(TokenEqual)) {
+    expression();
+    emit_byte_idx(OpSetProperty, name_idx);
+  } else {
+    emit_byte_idx(OpGetProperty, name_idx);
+  }
 }
 
 static void binary(bool can_assign) {
