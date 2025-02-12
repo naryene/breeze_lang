@@ -349,7 +349,14 @@ static InterpretResult run() {
       }
 
       ObjInstance *instance = AS_INSTANCE(peek_stack(1));
-      table_insert(&instance->fields, READ_STRING(), peek_stack(0));
+      ObjString *name = READ_STRING();
+
+      if (!table_contains(&instance->fields, name)) {
+        runtime_error("Undefined property '%s'", name->chars);
+        return InterpretRuntimeErr;
+      }
+
+      table_insert(&instance->fields, name, peek_stack(0));
       Value value = pop_stack();
       pop_stack();
       push_stack(value);

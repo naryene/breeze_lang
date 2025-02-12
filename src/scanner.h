@@ -35,6 +35,7 @@ typedef enum {
   TokenString,
   TokenNumber,
 
+  TokenImpl,
   TokenClass,
   TokenElse,
   TokenFalse,

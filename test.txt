@@ -4,5 +4,6 @@ class Human {
 
 let employee = Human();
 employee.name = "nassim";
+employee.age = 23;
 
- print("The employee name is "+ employee.name+employee.age);
+print(employee.age);

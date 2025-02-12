@@ -533,6 +533,27 @@ static void function(const FunctionType function_type) {
   }
 }
 
+static void method() {
+  consume_token(TokenFn, "Expect method 'fn' declaration.");
+  consume_token(TokenIdentifier, "Expect method name.");
+  uint32_t method_name_idx = emit_name(&parser.previous);
+  FunctionType function_type = TypeFunction;
+  function(function_type);
+  emit_byte_idx(OpMethod, method_name_idx);
+}
+
+static void property_declaration() {
+  consume_token(TokenIdentifier, "Expect property name.");
+  uint32_t name_idx = emit_name(&parser.previous);
+  if (match_token(TokenEqual)) {
+    expression();
+  } else {
+    emit_byte(OpNull);
+  }
+  consume_token(TokenSemiColon, "Expect ';' after variable declaration.");
+  emit_byte_idx(OpDefineProperty, name_idx);
+}
+
 ParseRule rules[] = {
     [TokenLeftParen] = {grouping, call, PrecCall},
     [TokenRightParen] = {NULL, NULL, PrecNone},
@@ -909,6 +930,10 @@ static void class_declaration() {
   define_variable(class_name_idx);
 
   consume_token(TokenLeftBrace, "Expect '{' before class body.");
+  while (!check_token(TokenRightBrace) && !check_token(TokenEof) &&
+         match_token(TokenLet)) {
+    property_declaration();
+  }
   while (!check_token(TokenRightBrace) && !check_token(TokenEof)) {
     method();
   }

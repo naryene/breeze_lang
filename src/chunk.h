@@ -24,6 +24,8 @@ typedef enum {
   OpDiv,
   OpPrint,
   OpPop,
+  OpMethod,
+  OpDefineProperty,
   OpSetProperty,
   OpGetProperty,
   OpDefineGlobal,

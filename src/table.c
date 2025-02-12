@@ -19,8 +19,8 @@ void free_table(Table *table) {
   init_table(table);
 }
 
-static Entry *find_entry(Entry *entries, uint32_t capacity,
-                         const ObjString *key) {
+static Entry *find_table_entry(Entry *entries, uint32_t capacity,
+                               const ObjString *key) {
   uint32_t idx = key->hash % capacity;
   Entry *tombstone = NULL;
   while (true) {
@@ -41,12 +41,23 @@ static Entry *find_entry(Entry *entries, uint32_t capacity,
   }
 }
 
+bool table_contains(const Table *table, const ObjString *key) {
+  if (table->len == 0) {
+    return false;
+  }
+  Entry *entry = find_table_entry(table->entries, table->capacity, key);
+  if (entry->key == NULL) {
+    return false;
+  }
+  return true;
+}
+
 bool table_get(const Table *table, const ObjString *key, Value *value) {
   if (table->len == 0) {
     return false;
   }
 
-  Entry *entry = find_entry(table->entries, table->capacity, key);
+  Entry *entry = find_table_entry(table->entries, table->capacity, key);
   if (entry->key == NULL) {
     return false;
   }
@@ -55,7 +66,7 @@ bool table_get(const Table *table, const ObjString *key, Value *value) {
   return true;
 }
 
-static void adjust_capacity(Table *table, uint32_t capacity) {
+static void adjust_table_capacity(Table *table, uint32_t capacity) {
   Entry *entries = ALLOCATE(Entry, capacity);
   for (uint32_t i = 0; i < capacity; i += 1) {
     entries[i].key = NULL;
@@ -68,9 +79,9 @@ static void adjust_capacity(Table *table, uint32_t capacity) {
     if (entry->key == NULL) {
       continue;
     }
-    Entry *dest = find_entry(entries, capacity, entry->key);
-    dest->key = entry->key;
-    dest->value = entry->value;
+    Entry *dst = find_table_entry(entries, capacity, entry->key);
+    dst->key = entry->key;
+    dst->value = entry->value;
     table->len += 1;
   }
 
@@ -82,9 +93,9 @@ static void adjust_capacity(Table *table, uint32_t capacity) {
 bool table_insert(Table *table, ObjString *key, Value value) {
   if (table->len + 1 > table->capacity * TABLE_MAX_LOAD) {
     uint32_t capacity = GROW_CAPACITY(table->capacity);
-    adjust_capacity(table, capacity);
+    adjust_table_capacity(table, capacity);
   }
-  Entry *entry = find_entry(table->entries, table->capacity, key);
+  Entry *entry = find_table_entry(table->entries, table->capacity, key);
   bool is_new_key = entry->key == NULL;
   if (is_new_key) {
     entry->key = key;
@@ -102,7 +113,7 @@ bool table_remove(Table *table, const ObjString *key) {
     return false;
   }
 
-  Entry *entry = find_entry(table->entries, table->capacity, key);
+  Entry *entry = find_table_entry(table->entries, table->capacity, key);
   if (entry->key == NULL) {
     return false;
   }
@@ -112,17 +123,17 @@ bool table_remove(Table *table, const ObjString *key) {
   return true;
 }
 
-void table_copy(const Table *src, Table *dest) {
+void table_copy(const Table *src, Table *dst) {
   for (uint32_t i = 0; i < src->capacity; i += 1) {
     Entry *entry = &src->entries[i];
     if (entry->key != NULL) {
-      table_insert(dest, entry->key, entry->value);
+      table_insert(dst, entry->key, entry->value);
     }
   }
 }
 
-ObjString *table_find_string(Table *table, const char *chars, uint32_t len,
-                             uint32_t hash) {
+ObjString *table_find_string(const Table *table, const char *chars,
+                             uint32_t len, uint32_t hash) {
   if (table->len == 0) {
     return NULL;
   }
@@ -158,5 +169,70 @@ void mark_table(Table *table) {
     Entry *entry = &table->entries[i];
     mark_object((Obj *)entry->key);
     mark_value(entry->value);
+  }
+}
+
+void init_set(Set *set) {
+  set->capacity = 0;
+  set->len = 0;
+  set->entries = NULL;
+}
+
+void free_set(Set *set) {
+  FREE_ARRAY(ObjString, set->entries, set->capacity);
+  init_set(set);
+}
+
+static ObjString **find_set_entry(ObjString **entries, uint32_t capacity,
+                                  const ObjString *key) {
+  uint32_t idx = key->hash % capacity;
+  ObjString **tombstone = NULL;
+
+  while (true) {
+    ObjString **entry = &entries[idx];
+    if (entry == NULL) {
+      if (tombstone != NULL) {
+        return tombstone;
+      }
+      return entry;
+    } else if (*entry == key) {
+      return entry;
+    }
+
+    idx = (idx + 1) % capacity;
+  }
+}
+
+static void adjust_set_capacity(Set *set, uint32_t capacity) {
+  ObjString **entries = ALLOCATE(ObjString *, capacity);
+  for (uint32_t i = 0; i < capacity; i += 1) {
+    entries[i] = NULL;
+  }
+
+  set->len = 0;
+  for (uint32_t i = 0; i < set->capacity; i += 1) {
+    ObjString *entry = &set->entries[i];
+    if (entry == NULL) {
+      continue;
+    }
+    ObjString **dst = find_set_entry(entries, capacity, entry);
+    *dst = entry;
+    set->len += 1;
+  }
+
+  FREE_ARRAY(ObjString *, set->entries, set->capacity);
+  set->entries = *entries;
+  set->capacity = capacity;
+}
+
+bool set_insert(Set *set, const ObjString *new_entry) {
+  if (set->len + 1 > set->capacity * TABLE_MAX_LOAD) {
+    uint32_t capacity = GROW_CAPACITY(set->capacity);
+    adjust_set_capacity(set, capacity);
+  }
+  ObjString **entry = find_set_entry(&set->entries, set->capacity, new_entry);
+  bool is_new_key = *entry == NULL;
+  if (is_new_key) {
+
   }
 }
