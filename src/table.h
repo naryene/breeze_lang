@@ -7,21 +7,26 @@
 #include "common.h"
 #include "value.h"
 
-typedef struct {
+typedef struct TableEntry {
   ObjString *key;
   Value value;
-} Entry;
+} TableEntry;
+
+typedef struct SetEntry {
+  ObjString *key;
+  bool is_tombstone;
+} SetEntry;
 
 typedef struct Table {
   uint32_t len;
   uint32_t capacity;
-  Entry *entries;
+  TableEntry *entries;
 } Table;
 
 typedef struct Set {
   uint32_t len;
   uint32_t capacity;
-  ObjString *entries;
+  SetEntry *entries;
 } Set;
 
 void init_table(Table *table);
@@ -38,9 +43,9 @@ void mark_table(Table *table);
 
 void init_set(Set *set);
 void free_set(Set *set);
-bool set_contains(const Set *set, const ObjString *entry);
-bool set_insert(Set *set, const ObjString *entry);
-bool set_remove(Set *set, const ObjString *entry);
+bool set_contains(const Set *set, const ObjString *key);
+bool set_insert(Set *set, ObjString *key);
+bool set_remove(Set *set, const ObjString *key);
 void set_copy(const Set *src, Set *dst);
 ObjString *set_find_string(const Set *set, const char *chars, uint32_t len,
                            uint32_t hash);
