@@ -923,12 +923,14 @@ static void block() {
 
 static void class_declaration() {
   consume_token(TokenIdentifier, "Expect class name");
+  Token class_name = parser.previous;
   uint32_t class_name_idx = emit_name(&parser.previous);
   declare_variable();
 
   emit_byte_idx(OpClass, class_name_idx);
   define_variable(class_name_idx);
 
+  named_variable(&class_name, false);
   consume_token(TokenLeftBrace, "Expect '{' before class body.");
   while (!check_token(TokenRightBrace) && !check_token(TokenEof) &&
          match_token(TokenLet)) {
