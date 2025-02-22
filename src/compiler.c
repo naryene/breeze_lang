@@ -545,11 +545,11 @@ static void method() {
 static void property_declaration() {
   consume_token(TokenIdentifier, "Expect property name.");
   uint32_t name_idx = emit_name(&parser.previous);
-  if (match_token(TokenEqual)) {
-    expression();
-  } else {
-    emit_byte(OpNull);
-  }
+  // if (match_token(TokenEqual)) {
+  //   expression();
+  // } else {
+  //   emit_byte(OpNull);
+  // }
   consume_token(TokenSemiColon, "Expect ';' after variable declaration.");
   emit_byte_idx(OpDefineProperty, name_idx);
 }

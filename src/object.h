@@ -96,6 +96,7 @@ typedef struct ObjClass {
   Obj obj;
   ObjString *name;
   Table methods;
+  Set fields;
 } ObjClass;
 
 typedef struct ObjInstance {

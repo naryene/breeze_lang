@@ -342,6 +342,9 @@ static InterpretResult run() {
       push_stack(*frame->closure->upvalues[upvalue_idx]->location);
       break;
     }
+    case OpDefineProperty: {
+
+      }
     case OpSetProperty: {
       if (!IS_INSTANCE(peek_stack(1))) {
         runtime_error("Properties are defined for instances only.");
