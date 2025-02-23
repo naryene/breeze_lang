@@ -343,8 +343,18 @@ static InterpretResult run() {
       break;
     }
     case OpDefineProperty: {
+      ObjClass *klass = AS_CLASS(peek_stack(0));
+      ObjString *name = READ_STRING();
 
+      if (set_contains(&klass->fields, name)) {
+        runtime_error("Field %s is already defined.", name->chars);
+        return InterpretRuntimeErr;
       }
+      set_insert(&klass->fields, name);
+
+
+      break;
+    }
     case OpSetProperty: {
       if (!IS_INSTANCE(peek_stack(1))) {
         runtime_error("Properties are defined for instances only.");
@@ -354,8 +364,8 @@ static InterpretResult run() {
       ObjInstance *instance = AS_INSTANCE(peek_stack(1));
       ObjString *name = READ_STRING();
 
-      if (!table_contains(&instance->fields, name)) {
-        runtime_error("Undefined property '%s'", name->chars);
+      if (!set_contains(&instance->klass->fields, name)) {
+        runtime_error("Undefined property '%s'.", name->chars);
         return InterpretRuntimeErr;
       }
 

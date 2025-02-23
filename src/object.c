@@ -31,6 +31,7 @@ ObjClass *new_class(ObjString *name) {
   ObjClass *klass = ALLOCATE_OBJ(ObjClass, ObjClassType);
   klass->name = name;
   init_table(&klass->methods);
+  init_set(&klass->fields);
   return klass;
 }
 

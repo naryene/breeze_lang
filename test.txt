@@ -1,9 +1,14 @@
 class Human {
-
+  let name;
+  let age;
 }
 
 let employee = Human();
-employee.name = "nassim";
+employee.name = "rayene";
 employee.age = 23;
+employee.test=12;
 
-print(employee.age);
+print("employee name: "+ employee.name);
+
+print ("employee age:");
+print (employee.age);

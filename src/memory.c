@@ -145,6 +145,7 @@ static void free_object(Obj *object) {
   case ObjClassType: {
     ObjClass *klass = (ObjClass *)object;
     free_table(&klass->methods);
+    free_set(&klass->fields);
     FREE(ObjClass, object);
     break;
   }

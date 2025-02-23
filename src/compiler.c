@@ -550,7 +550,7 @@ static void property_declaration() {
   // } else {
   //   emit_byte(OpNull);
   // }
-  consume_token(TokenSemiColon, "Expect ';' after variable declaration.");
+  consume_token(TokenSemiColon, "Expect ';' after property definition.");
   emit_byte_idx(OpDefineProperty, name_idx);
 }
 

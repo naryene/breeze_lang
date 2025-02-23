@@ -46,11 +46,10 @@ bool table_contains(const Table *table, const ObjString *key) {
     return false;
   }
   TableEntry *entry = find_table_entry(table->entries, table->capacity, key);
-  if (entry->key == NULL) {
-    return false;
-  }
-  return true;
+  return entry->key != NULL;
 }
+
+
 
 bool table_get(const Table *table, const ObjString *key, Value *value) {
   if (table->len == 0) {
@@ -222,7 +221,7 @@ static void adjust_set_capacity(Set *set, uint32_t capacity) {
   set->len = 0;
   for (uint32_t i = 0; i < set->capacity; i += 1) {
     SetEntry *entry = &set->entries[i];
-    if (entry == NULL) {
+    if (entry->key == NULL) {
       continue;
     }
     SetEntry *dst = find_set_entry(entries, capacity, entry->key);
@@ -231,7 +230,7 @@ static void adjust_set_capacity(Set *set, uint32_t capacity) {
     set->len += 1;
   }
 
-  FREE_ARRAY(ObjString *, set->entries, set->capacity);
+  FREE_ARRAY(SetEntry, set->entries, set->capacity);
   set->entries = entries;
   set->capacity = capacity;
 }
