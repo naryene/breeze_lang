@@ -6,7 +6,6 @@ class Human {
 let employee = Human();
 employee.name = "rayene";
 employee.age = 23;
-employee.test=12;
 
 print("employee name: "+ employee.name);
 

@@ -325,7 +325,7 @@ static int32_t resolve_upvalue(Compiler *compiler, const Token *name) {
   return -1;
 }
 
-static void named_variable(const Token *name, bool can_assign) {
+static void emit_variable_operation(const Token *name, bool can_assign) {
   uint8_t get_op, set_op;
   int32_t arg = resolve_local(current_compiler, name);
   if (arg != -1) {
@@ -542,7 +542,7 @@ static void method() {
   emit_byte_idx(OpMethod, method_name_idx);
 }
 
-static void property_declaration() {
+static void field_declaration() {
   consume_token(TokenIdentifier, "Expect property name.");
   uint32_t name_idx = emit_name(&parser.previous);
   // if (match_token(TokenEqual)) {
@@ -637,7 +637,7 @@ static void string(bool can_assign) {
 }
 
 static void variable(bool can_assign) {
-  named_variable(&parser.previous, can_assign);
+  emit_variable_operation(&parser.previous, can_assign);
 }
 
 static void unary(bool can_assign) {
@@ -930,11 +930,11 @@ static void class_declaration() {
   emit_byte_idx(OpClass, class_name_idx);
   define_variable(class_name_idx);
 
-  named_variable(&class_name, false);
+  emit_variable_operation(&class_name, false);
   consume_token(TokenLeftBrace, "Expect '{' before class body.");
   while (!check_token(TokenRightBrace) && !check_token(TokenEof) &&
          match_token(TokenLet)) {
-    property_declaration();
+    field_declaration();
   }
   while (!check_token(TokenRightBrace) && !check_token(TokenEof)) {
     method();
