@@ -93,6 +93,8 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
     return simple_inst("OpRet", offset);
   case OpClass:
     return special_inst("OpClass", chunk, offset, NULL);
+  case OpMethod:
+    return special_inst("OpMethod", chunk, offset, NULL);
   case OpClosure: {
     uint32_t constant_idx;
     offset = special_inst("OpClosure", chunk, offset, &constant_idx);

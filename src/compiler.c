@@ -940,6 +940,7 @@ static void class_declaration() {
     method();
   }
   consume_token(TokenRightBrace, "Expect '}' after class body.");
+  emit_byte(OpPop);
 }
 
 static void fn_declaration() {

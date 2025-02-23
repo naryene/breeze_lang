@@ -193,6 +193,13 @@ static void close_upvalues(Value *local) {
   }
 }
 
+static void define_method(ObjString *name){
+  Value method = peek_stack(0);
+  ObjClass *klass = AS_CLASS(peek_stack(1));
+  table_insert(&klass->methods, name, method);
+  pop_stack();
+}
+
 static InterpretResult check_bool(Value value) {
   if (!IS_BOOL(value)) {
     runtime_error("Operand must be a boolean.");
@@ -482,6 +489,10 @@ static InterpretResult run() {
       frame = &vm.frames[vm.frames_len - 1];
       break;
     }
+      case OpMethod: {
+        define_method(READ_STRING());
+        break;
+      }
     case OpClosure: {
       ObjFunction *function = AS_FUNCTION(READ_CONSTANT(READ_BYTE()));
       ObjClosure *closure = new_closure(function);
