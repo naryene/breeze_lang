@@ -267,3 +267,19 @@ bool set_remove(Set *set, const ObjString *key) {
   entry->is_tombstone = true;
   return true;
 }
+
+void set_remove_white(Set *set) {
+  for (uint32_t idx = 0; idx < set->len; idx += 1) {
+    SetEntry *entry = &set->entries[idx];
+    if (entry->key != NULL && !entry->key->obj.is_marked) {
+      set_remove(set, entry->key);
+    }
+  }
+}
+
+void mark_set(Set *set) {
+  for (uint32_t i = 0; i < set->capacity; i += 1) {
+    SetEntry *entry = &set->entries[i];
+    mark_object((Obj *)entry->key);
+  }
+}
