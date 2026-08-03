@@ -20,7 +20,7 @@ Breeze Lang is a programming language developed using C. This project is current
 Clone the repository:
 
 ```sh
-git clone https://github.com/nobertos/breeze_lang.git
+git clone https://github.com/naryene/breeze_lang.git
 cd breeze_lang
 ```
 
