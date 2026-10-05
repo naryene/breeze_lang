@@ -217,21 +217,24 @@ static uint32_t emit_jmp(uint8_t inst) {
   return current_chunk()->len - 2;
 }
 
+// Jump operands are absolute 16-bit offsets into the chunk, so what must
+// fit is the target itself, not the distance to it.
+static void check_jmp_target(uint32_t target) {
+  if (target > UINT16_MAX) {
+    error("Function too large: jump target beyond 64KB of bytecode.");
+  }
+}
+
 static void emit_loop(uint32_t loop_start) {
   emit_byte(OpJmp);
-  uint32_t offset = current_chunk()->len - loop_start + 2;
-  if (offset > UINT16_MAX) {
-    error("Loop body is too large.");
-  }
+  check_jmp_target(loop_start);
   emit_word(loop_start & 0xff, (loop_start >> 8) & 0xff);
 }
 
-static void patch_jmp(int32_t offset) {
-  int32_t jmp = current_chunk()->len;
-  if ((jmp - offset - 2) > UINT16_MAX) {
-    error("Too much code to jump over.");
-  }
-  current_chunk()->code[offset] = (jmp) & 0xff;
+static void patch_jmp(uint32_t offset) {
+  uint32_t jmp = current_chunk()->len;
+  check_jmp_target(jmp);
+  current_chunk()->code[offset] = jmp & 0xff;
   current_chunk()->code[offset + 1] = (jmp >> 8) & 0xff;
 }
 
