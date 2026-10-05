@@ -1,0 +1,7 @@
+// repl
+let saved;
+fn f() { let x = "old"; fn g() { print x; } saved = g; boom(); }
+f();
+fn h() { let y = "CLOBBERED"; return 0; } h(); saved();
+// expect runtime error: Undefined variable 'boom'.
+// expect: old

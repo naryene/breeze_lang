@@ -26,9 +26,12 @@ static Value clock_native(int32_t args_len, Value *args) {
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
+static void close_upvalues(Value *local);
+
 static void reset_stack() {
   vm.stack_ptr = vm.stack;
   vm.frames_len = 0;
+  vm.open_upvalues = NULL;
 }
 
 static void runtime_error(const char *format, ...) {
@@ -51,6 +54,9 @@ static void runtime_error(const char *format, ...) {
     }
   }
 
+  // Closures that escaped (e.g. into a global) may still reference stack
+  // slots that are about to be discarded; give them their current values.
+  close_upvalues(vm.stack);
   reset_stack();
 }
 
