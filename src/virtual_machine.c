@@ -22,13 +22,17 @@
 
 VirtualMachine vm;
 
-static Value clock_native(int32_t args_len, Value *args) {
+static Value clock_native([[maybe_unused]] int32_t args_len,
+                          [[maybe_unused]] Value *args) {
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
+
+static void close_upvalues(Value *local);
 
 static void reset_stack() {
   vm.stack_ptr = vm.stack;
   vm.frames_len = 0;
+  vm.open_upvalues = NULL;
 }
 
 static void runtime_error(const char *format, ...) {
@@ -51,6 +55,9 @@ static void runtime_error(const char *format, ...) {
     }
   }
 
+  // Closures that escaped (e.g. into a global) may still reference stack
+  // slots that are about to be discarded; give them their current values.
+  close_upvalues(vm.stack);
   reset_stack();
 }
 
@@ -62,9 +69,10 @@ static void define_native(const char *name, NativeFn function) {
   pop_stack();
 }
 
-void init_vm() {
+// Puts every VM field into its empty state without allocating, so it is safe
+// to call both before setup and after teardown.
+static void reset_vm_state() {
   reset_stack();
-  vm.open_upvalues = NULL;
 
   vm.bytes_allocated = 0;
   vm.next_gc = 1024 * 1024;
@@ -76,6 +84,10 @@ void init_vm() {
 
   init_table(&vm.globals);
   init_table(&vm.strings);
+}
+
+void init_vm() {
+  reset_vm_state();
   define_native("clock", clock_native);
 }
 
@@ -83,7 +95,7 @@ void free_vm() {
   free_table(&vm.globals);
   free_table(&vm.strings);
   free_objects(vm.objects);
-  init_vm();
+  reset_vm_state();
 }
 
 void push_stack(Value value) {
@@ -109,8 +121,8 @@ static Value peek_stack(uint32_t distance) {
 #ifdef DEBUG_TRACE_EXECUTION
 void print_constants(const Chunk *chunk) {
   printf("Constants:\n");
-  for (int i = 0; i < chunk->constants.len; i++) {
-    printf("%d: ", i);
+  for (uint32_t i = 0; i < chunk->constants.len; i += 1) {
+    printf("%u: ", i);
     print_value(chunk->constants.values[i]);
     printf("\n");
   }
@@ -145,8 +157,14 @@ static bool call_value(Value callee, uint8_t args_len) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
     case ObjClassType: {
+      // No initializers yet, so a class takes no arguments. Rejecting them
+      // also keeps the stack balanced: the instance replaces the callee slot.
+      if (args_len != 0) {
+        runtime_error("Expected 0 arguments but got %d.", args_len);
+        return false;
+      }
       ObjClass *klass = (ObjClass *)AS_OBJ(callee);
-      vm.stack_ptr[-(args_len + 1)] = OBJ_VAL(new_instance(klass));
+      vm.stack_ptr[-1] = OBJ_VAL(new_instance(klass));
       return true;
     }
     case ObjClosureType: {
@@ -224,6 +242,28 @@ static void concat() {
   push_stack(OBJ_VAL(result));
 }
 
+static inline uint8_t read_byte(CallFrame *frame) {
+  frame->inst_ptr += 1;
+  return frame->inst_ptr[-1];
+}
+
+// Reads an index operand whose width is given by the prefix opcode that was
+// just read: OpConst -> 1 byte, OpConstLong -> 3 bytes (little-endian).
+static inline uint32_t read_idx(CallFrame *frame, uint8_t width_op) {
+  if (width_op == OpConst) {
+    return read_byte(frame);
+  }
+  uint32_t idx = read_byte(frame);
+  idx |= (uint32_t)read_byte(frame) << 8;
+  idx |= (uint32_t)read_byte(frame) << 16;
+  return idx;
+}
+
+static inline ObjString *read_string(CallFrame *frame) {
+  uint32_t idx = read_idx(frame, read_byte(frame));
+  return AS_STRING(frame->closure->function->chunk.constants.values[idx]);
+}
+
 static InterpretResult run() {
   /*** MACROS DEFINITION ***/
   CallFrame *frame = &vm.frames[vm.frames_len - 1];
@@ -235,26 +275,9 @@ static InterpretResult run() {
   (frame->inst_ptr += 2,                                                       \
    (uint16_t)(frame->inst_ptr[-2] | (frame->inst_ptr[-1] << 8)))
 
-#define READ_IDX(inst)                                                         \
-  ({                                                                           \
-    uint32_t idx;                                                              \
-    if (inst == OpConst) {                                                     \
-      idx = (uint32_t)READ_BYTE();                                             \
-    } else {                                                                   \
-      idx = (uint32_t)((READ_BYTE()) | (READ_BYTE() << 8) |                    \
-                       (READ_BYTE() << 16));                                   \
-    }                                                                          \
-    idx;                                                                       \
-  })
-
-#define READ_CONSTANT(inst) (READ_VALUE(READ_IDX(inst)))
-
-#define READ_STRING()                                                          \
-  ({                                                                           \
-    uint32_t idx = READ_IDX(READ_BYTE());                                      \
-    Value constant = READ_VALUE(idx);                                          \
-    AS_STRING(constant);                                                       \
-  })
+#define READ_IDX(width_op) read_idx(frame, width_op)
+#define READ_CONSTANT(width_op) (READ_VALUE(READ_IDX(width_op)))
+#define READ_STRING() read_string(frame)
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
@@ -530,12 +553,15 @@ static InterpretResult run() {
       frame = &vm.frames[vm.frames_len - 1];
       break;
     }
+    default: {
+      runtime_error("Unknown opcode %d.", inst);
+      return InterpretRuntimeErr;
+    }
     }
   }
 #undef READ_BYTE
 #undef READ_WORD
 #undef READ_CONSTANT
-#undef READ_CONSTANT_LONG
 #undef READ_IDX
 #undef READ_STRING
 #undef BINARY_OP

@@ -1,0 +1,6 @@
+// repl
+let = ;
+fn g() { let local = 1; return local + 41; }
+print g();
+// expect compile error: Expect variable name.
+// expect: 42

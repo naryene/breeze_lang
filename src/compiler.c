@@ -119,7 +119,9 @@ static void advance() {
     if (parser.current.type != TokenError) {
       break;
     }
-    error(parser.current.start);
+    // The error token is `current`, and its text is the scanner's message,
+    // not a format string.
+    error_at(&parser.current, parser.current.start);
   }
 }
 
@@ -143,7 +145,7 @@ static bool match_token(TokenType type) {
 }
 
 static bool max_constants_error(const uint32_t idx) {
-  if (idx > UINT16_MAX) {
+  if (idx > MAX_OPERAND_IDX) {
     error("Too many constants in one chunk.");
     return true;
   }
@@ -167,7 +169,8 @@ static void emit_return() { emit_word(OpNull, OpRet); }
 static uint32_t emit_constant_array(const Value value) {
   uint32_t idx = add_constant(current_chunk(), value);
   if (max_constants_error(idx)) {
-    exit(1);
+    // The error is recorded; compile() returns NULL once parsing finishes.
+    return 0;
   }
   return idx;
 }
@@ -214,21 +217,24 @@ static uint32_t emit_jmp(uint8_t inst) {
   return current_chunk()->len - 2;
 }
 
+// Jump operands are absolute 16-bit offsets into the chunk, so what must
+// fit is the target itself, not the distance to it.
+static void check_jmp_target(uint32_t target) {
+  if (target > UINT16_MAX) {
+    error("Function too large: jump target beyond 64KB of bytecode.");
+  }
+}
+
 static void emit_loop(uint32_t loop_start) {
   emit_byte(OpJmp);
-  uint32_t offset = current_chunk()->len - loop_start + 2;
-  if (offset > UINT16_MAX) {
-    error("Loop body is too large.");
-  }
+  check_jmp_target(loop_start);
   emit_word(loop_start & 0xff, (loop_start >> 8) & 0xff);
 }
 
-static void patch_jmp(int32_t offset) {
-  int32_t jmp = current_chunk()->len;
-  if ((jmp - offset - 2) > UINT16_MAX) {
-    error("Too much code to jump over.");
-  }
-  current_chunk()->code[offset] = (jmp) & 0xff;
+static void patch_jmp(uint32_t offset) {
+  uint32_t jmp = current_chunk()->len;
+  check_jmp_target(jmp);
+  current_chunk()->code[offset] = jmp & 0xff;
   current_chunk()->code[offset + 1] = (jmp >> 8) & 0xff;
 }
 
@@ -294,7 +300,7 @@ static int32_t add_upvalue(Compiler *compiler, const size_t index,
     }
   }
 
-  if (upvalues_len == UINT16_COUNT) {
+  if (upvalues_len == UINT8_COUNT) {
     error("Too many closure variables in function.");
     return 0;
   }
@@ -313,7 +319,7 @@ static int32_t resolve_upvalue(Compiler *compiler, const Token *name) {
 
   int32_t local_idx = resolve_local(compiler->enclosing, name);
   if (local_idx != -1) {
-    compiler->enclosing->locals[local_idx].is_captured = false;
+    compiler->enclosing->locals[local_idx].is_captured = true;
     return add_upvalue(compiler, local_idx, true);
   }
 
@@ -350,11 +356,10 @@ static void emit_variable_operation(const Token *name, bool can_assign) {
 }
 
 static void add_local(const Token *name) {
-  // My version is able to contain more local
-  // variables, but i'm trying to do same as clox
-  // for now
-  if (current_compiler->locals_len == UINT16_COUNT) {
-    error("Too many local variabls in function.");
+  // Bounded by the size of `locals[]` and by STACK_MAX, which reserves
+  // UINT8_COUNT slots per call frame.
+  if (current_compiler->locals_len == UINT8_COUNT) {
+    error("Too many local variables in function.");
     return;
   }
   Local *local = &current_compiler->locals[current_compiler->locals_len];
@@ -621,17 +626,17 @@ static void parse_precedence(Precedence precedence) {
   }
 }
 
-static void grouping(bool can_assign) {
+static void grouping([[maybe_unused]] bool can_assign) {
   expression();
   consume_token(TokenRightParen, "Expect ')' after expression.");
 }
 
-static void number(bool can_assign) {
+static void number([[maybe_unused]] bool can_assign) {
   double value = strtod(parser.previous.start, NULL);
   emit_constant(NUMBER_VAL(value));
 }
 
-static void string(bool can_assign) {
+static void string([[maybe_unused]] bool can_assign) {
   emit_constant(
       OBJ_VAL(copy_string(parser.previous.start + 1, parser.previous.len - 2)));
 }
@@ -640,7 +645,7 @@ static void variable(bool can_assign) {
   emit_variable_operation(&parser.previous, can_assign);
 }
 
-static void unary(bool can_assign) {
+static void unary([[maybe_unused]] bool can_assign) {
   TokenType operator_type = parser.previous.type;
 
   parse_precedence(PrecUnary);
@@ -659,16 +664,16 @@ static void unary(bool can_assign) {
   }
 }
 
-static void and_and_(bool can_assign) {
+static void and_and_([[maybe_unused]] bool can_assign) {
   int32_t end_jmp = emit_jmp(OpJmpIfFalse);
 
-  emit_jmp(OpPop);
+  emit_byte(OpPop);
   parse_precedence(PrecAndAnd);
 
   patch_jmp(end_jmp);
 }
 
-static void or_or_(bool can_assign) {
+static void or_or_([[maybe_unused]] bool can_assign) {
   int32_t else_jmp = emit_jmp(OpJmpIfFalse);
   int32_t end_jmp = emit_jmp(OpJmp);
 
@@ -691,7 +696,7 @@ static void dot(bool can_assign) {
   }
 }
 
-static void binary(bool can_assign) {
+static void binary([[maybe_unused]] bool can_assign) {
   TokenType operator_type = parser.previous.type;
   ParseRule *rule = get_rule(operator_type);
   parse_precedence((Precedence)(rule->precedence + 1));
@@ -742,12 +747,12 @@ static void binary(bool can_assign) {
   }
 }
 
-static void call(bool can_assign) {
+static void call([[maybe_unused]] bool can_assign) {
   uint8_t args_len = argument_list();
   emit_word(OpCall, args_len);
 }
 
-static void literal(bool can_assign) {
+static void literal([[maybe_unused]] bool can_assign) {
   switch (parser.previous.type) {
   case TokenNull: {
     emit_byte(OpNull);
@@ -879,7 +884,9 @@ static void for_statement() {
   }
 
   consume_token(TokenLeftBrace, "Expect '{' after 'for' statement.");
-  block();
+  // The body needs its own scope so its locals are popped (or closed) at the
+  // end of every iteration, not once after the whole loop.
+  scoped_block();
   emit_loop(loop_start);
 
   if (exit_jmp != -1) {
@@ -992,12 +999,10 @@ ObjFunction *compile(const char *source) {
   while (!match_token(TokenEof)) {
     declaration();
   }
-  if (parser.had_error) {
-    return NULL;
-  }
+  // Always unwind through end_compiler(): returning early would leave
+  // current_compiler pointing at this stack frame after compile() returns.
   ObjFunction *function = end_compiler();
-
-  return function;
+  return parser.had_error ? NULL : function;
 }
 
 void mark_compiler_roots() {

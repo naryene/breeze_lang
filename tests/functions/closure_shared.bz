@@ -1,0 +1,13 @@
+let get;
+let inc;
+{
+  let count = 0;
+  fn g() { return count; }
+  fn i() { count = count + 1; }
+  get = g;
+  inc = i;
+}
+let clobber = "stack slot reuse";
+inc();
+inc();
+print get();   // expect: 2

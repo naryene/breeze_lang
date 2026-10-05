@@ -1,0 +1,3 @@
+class A { let v; }
+let a = A(1, 2, 3);   // expect runtime error: Expected 0 arguments but got 3.
+print a;

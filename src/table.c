@@ -155,7 +155,8 @@ ObjString *table_find_string(const Table *table, const char *chars,
 }
 
 void table_remove_white(Table *table) {
-  for (uint32_t idx = 0; idx < table->len; idx += 1) {
+  // `len` counts live entries plus tombstones, not slots: scan every slot.
+  for (uint32_t idx = 0; idx < table->capacity; idx += 1) {
     TableEntry *entry = &table->entries[idx];
     if (entry->key != NULL && !entry->key->obj.is_marked) {
       table_remove(table, entry->key);
@@ -247,6 +248,7 @@ bool set_insert(Set *set, ObjString *key) {
     if (!entry->is_tombstone) {
       set->len += 1;
     }
+    entry->is_tombstone = false;
   }
   return is_new;
 }
@@ -268,7 +270,7 @@ bool set_remove(Set *set, const ObjString *key) {
 }
 
 void set_remove_white(Set *set) {
-  for (uint32_t idx = 0; idx < set->len; idx += 1) {
+  for (uint32_t idx = 0; idx < set->capacity; idx += 1) {
     SetEntry *entry = &set->entries[idx];
     if (entry->key != NULL && !entry->key->obj.is_marked) {
       set_remove(set, entry->key);
