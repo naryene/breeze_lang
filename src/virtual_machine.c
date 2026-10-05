@@ -68,9 +68,10 @@ static void define_native(const char *name, NativeFn function) {
   pop_stack();
 }
 
-void init_vm() {
+// Puts every VM field into its empty state without allocating, so it is safe
+// to call both before setup and after teardown.
+static void reset_vm_state() {
   reset_stack();
-  vm.open_upvalues = NULL;
 
   vm.bytes_allocated = 0;
   vm.next_gc = 1024 * 1024;
@@ -82,6 +83,10 @@ void init_vm() {
 
   init_table(&vm.globals);
   init_table(&vm.strings);
+}
+
+void init_vm() {
+  reset_vm_state();
   define_native("clock", clock_native);
 }
 
@@ -89,7 +94,7 @@ void free_vm() {
   free_table(&vm.globals);
   free_table(&vm.strings);
   free_objects(vm.objects);
-  init_vm();
+  reset_vm_state();
 }
 
 void push_stack(Value value) {
