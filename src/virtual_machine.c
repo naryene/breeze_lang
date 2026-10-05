@@ -22,7 +22,8 @@
 
 VirtualMachine vm;
 
-static Value clock_native(int32_t args_len, Value *args) {
+static Value clock_native([[maybe_unused]] int32_t args_len,
+                          [[maybe_unused]] Value *args) {
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
@@ -120,8 +121,8 @@ static Value peek_stack(uint32_t distance) {
 #ifdef DEBUG_TRACE_EXECUTION
 void print_constants(const Chunk *chunk) {
   printf("Constants:\n");
-  for (int i = 0; i < chunk->constants.len; i++) {
-    printf("%d: ", i);
+  for (uint32_t i = 0; i < chunk->constants.len; i += 1) {
+    printf("%u: ", i);
     print_value(chunk->constants.values[i]);
     printf("\n");
   }
@@ -241,6 +242,28 @@ static void concat() {
   push_stack(OBJ_VAL(result));
 }
 
+static inline uint8_t read_byte(CallFrame *frame) {
+  frame->inst_ptr += 1;
+  return frame->inst_ptr[-1];
+}
+
+// Reads an index operand whose width is given by the prefix opcode that was
+// just read: OpConst -> 1 byte, OpConstLong -> 3 bytes (little-endian).
+static inline uint32_t read_idx(CallFrame *frame, uint8_t width_op) {
+  if (width_op == OpConst) {
+    return read_byte(frame);
+  }
+  uint32_t idx = read_byte(frame);
+  idx |= (uint32_t)read_byte(frame) << 8;
+  idx |= (uint32_t)read_byte(frame) << 16;
+  return idx;
+}
+
+static inline ObjString *read_string(CallFrame *frame) {
+  uint32_t idx = read_idx(frame, read_byte(frame));
+  return AS_STRING(frame->closure->function->chunk.constants.values[idx]);
+}
+
 static InterpretResult run() {
   /*** MACROS DEFINITION ***/
   CallFrame *frame = &vm.frames[vm.frames_len - 1];
@@ -252,29 +275,9 @@ static InterpretResult run() {
   (frame->inst_ptr += 2,                                                       \
    (uint16_t)(frame->inst_ptr[-2] | (frame->inst_ptr[-1] << 8)))
 
-#define READ_IDX(inst)                                                         \
-  ({                                                                           \
-    uint32_t idx;                                                              \
-    if (inst == OpConst) {                                                     \
-      idx = (uint32_t)READ_BYTE();                                             \
-    } else {                                                                   \
-      /* Separate statements: the operands of `|` are unsequenced, so      \
-       * three READ_BYTE()s in one expression may run in any order. */      \
-      idx = (uint32_t)READ_BYTE();                                             \
-      idx |= (uint32_t)READ_BYTE() << 8;                                       \
-      idx |= (uint32_t)READ_BYTE() << 16;                                      \
-    }                                                                          \
-    idx;                                                                       \
-  })
-
-#define READ_CONSTANT(inst) (READ_VALUE(READ_IDX(inst)))
-
-#define READ_STRING()                                                          \
-  ({                                                                           \
-    uint32_t idx = READ_IDX(READ_BYTE());                                      \
-    Value constant = READ_VALUE(idx);                                          \
-    AS_STRING(constant);                                                       \
-  })
+#define READ_IDX(width_op) read_idx(frame, width_op)
+#define READ_CONSTANT(width_op) (READ_VALUE(READ_IDX(width_op)))
+#define READ_STRING() read_string(frame)
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
@@ -559,7 +562,6 @@ static InterpretResult run() {
 #undef READ_BYTE
 #undef READ_WORD
 #undef READ_CONSTANT
-#undef READ_CONSTANT_LONG
 #undef READ_IDX
 #undef READ_STRING
 #undef BINARY_OP

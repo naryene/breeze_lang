@@ -35,16 +35,16 @@ static Token error_token(const char *message) {
   return token;
 }
 
-static const char advance() {
+static char advance() {
   scanner.current += 1;
   return *(scanner.current - 1);
 }
 
-static const char peek() { return *(scanner.current); }
+static char peek() { return *(scanner.current); }
 
 static bool is_at_end() { return peek() == '\0'; }
 
-static const char peek_next() {
+static char peek_next() {
   if (is_at_end()) {
     return '\0';
   }

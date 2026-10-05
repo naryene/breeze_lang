@@ -626,17 +626,17 @@ static void parse_precedence(Precedence precedence) {
   }
 }
 
-static void grouping(bool can_assign) {
+static void grouping([[maybe_unused]] bool can_assign) {
   expression();
   consume_token(TokenRightParen, "Expect ')' after expression.");
 }
 
-static void number(bool can_assign) {
+static void number([[maybe_unused]] bool can_assign) {
   double value = strtod(parser.previous.start, NULL);
   emit_constant(NUMBER_VAL(value));
 }
 
-static void string(bool can_assign) {
+static void string([[maybe_unused]] bool can_assign) {
   emit_constant(
       OBJ_VAL(copy_string(parser.previous.start + 1, parser.previous.len - 2)));
 }
@@ -645,7 +645,7 @@ static void variable(bool can_assign) {
   emit_variable_operation(&parser.previous, can_assign);
 }
 
-static void unary(bool can_assign) {
+static void unary([[maybe_unused]] bool can_assign) {
   TokenType operator_type = parser.previous.type;
 
   parse_precedence(PrecUnary);
@@ -664,7 +664,7 @@ static void unary(bool can_assign) {
   }
 }
 
-static void and_and_(bool can_assign) {
+static void and_and_([[maybe_unused]] bool can_assign) {
   int32_t end_jmp = emit_jmp(OpJmpIfFalse);
 
   emit_byte(OpPop);
@@ -673,7 +673,7 @@ static void and_and_(bool can_assign) {
   patch_jmp(end_jmp);
 }
 
-static void or_or_(bool can_assign) {
+static void or_or_([[maybe_unused]] bool can_assign) {
   int32_t else_jmp = emit_jmp(OpJmpIfFalse);
   int32_t end_jmp = emit_jmp(OpJmp);
 
@@ -696,7 +696,7 @@ static void dot(bool can_assign) {
   }
 }
 
-static void binary(bool can_assign) {
+static void binary([[maybe_unused]] bool can_assign) {
   TokenType operator_type = parser.previous.type;
   ParseRule *rule = get_rule(operator_type);
   parse_precedence((Precedence)(rule->precedence + 1));
@@ -747,12 +747,12 @@ static void binary(bool can_assign) {
   }
 }
 
-static void call(bool can_assign) {
+static void call([[maybe_unused]] bool can_assign) {
   uint8_t args_len = argument_list();
   emit_word(OpCall, args_len);
 }
 
-static void literal(bool can_assign) {
+static void literal([[maybe_unused]] bool can_assign) {
   switch (parser.previous.type) {
   case TokenNull: {
     emit_byte(OpNull);

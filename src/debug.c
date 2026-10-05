@@ -68,7 +68,7 @@ static uint32_t special_inst(const char *name, const Chunk *chunk,
   return offset;
 }
 
-static uint32_t jmp_inst(const char *name, int8_t sign, const Chunk *chunk,
+static uint32_t jmp_inst(const char *name, const Chunk *chunk,
                          uint32_t offset) {
   uint16_t jmp = (uint16_t)chunk->code[offset + 1];
   jmp |= chunk->code[offset + 2] << 8;
@@ -112,9 +112,9 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   case OpCall:
     return byte_inst("OpCall", chunk, offset);
   case OpJmp:
-    return jmp_inst("OpJmp", 1, chunk, offset);
+    return jmp_inst("OpJmp", chunk, offset);
   case OpJmpIfFalse:
-    return jmp_inst("OpJmpIfFalse", 1, chunk, offset);
+    return jmp_inst("OpJmpIfFalse", chunk, offset);
   case OpConst:
     return constant_inst("OpConst", chunk, offset, NULL);
   case OpConstLong:
