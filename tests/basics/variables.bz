@@ -1,0 +1,15 @@
+let a = 1;
+let b;
+print a;        // expect: 1
+print b;        // expect: null
+a = a + 1;
+print a;        // expect: 2
+{
+  let a = "shadow";
+  print a;      // expect: shadow
+  {
+    let c = a + "!";
+    print c;    // expect: shadow!
+  }
+}
+print a;        // expect: 2

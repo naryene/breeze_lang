@@ -1,0 +1,13 @@
+class Human {
+  let name;
+  let age;
+}
+
+let employee = Human();
+employee.name = "rayene";
+employee.age = 23;
+
+print "employee name: " + employee.name;  // expect: employee name: rayene
+print employee.age;                        // expect: 23
+print Human;                               // expect: <class Human>
+print employee;                            // expect: instance of <class Human>

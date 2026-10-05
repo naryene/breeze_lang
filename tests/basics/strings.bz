@@ -1,0 +1,4 @@
+print "hello";              // expect: hello
+print "foo" + "bar";        // expect: foobar
+print "a" == "a";           // expect: true
+print "a" + "b" == "ab";    // expect: true

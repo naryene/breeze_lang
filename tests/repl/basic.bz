@@ -1,0 +1,4 @@
+// repl
+let a = 2;
+print a * 21;
+// expect: 42

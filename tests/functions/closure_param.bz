@@ -1,0 +1,6 @@
+fn make_adder(n) {
+  fn add(x) { return x + n; }
+  return add;
+}
+let add5 = make_adder(5);
+print add5(1);      // expect: 6

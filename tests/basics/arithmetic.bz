@@ -1,0 +1,12 @@
+print 1 + 2;          // expect: 3
+print 10 - 4 * 2;     // expect: 2
+print (10 - 4) * 2;   // expect: 12
+print 7 / 2;          // expect: 3.5
+print -3 + 1;         // expect: -2
+print 1 < 2;          // expect: true
+print 2 <= 2;         // expect: true
+print 3 > 4;          // expect: false
+print 3 >= 4;         // expect: false
+print 1 == 1;         // expect: true
+print 1 != 1;         // expect: false
+print !true;          // expect: false
