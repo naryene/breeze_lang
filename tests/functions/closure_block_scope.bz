@@ -1,0 +1,11 @@
+fn outer() {
+  let f;
+  {
+    let x = "captured";
+    fn inner() { print x; }
+    f = inner;
+  }
+  let junk = "overwritten";
+  return f;
+}
+outer()();   // expect: captured

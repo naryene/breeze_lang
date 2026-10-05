@@ -1,0 +1,11 @@
+let first;
+let second;
+let i = 0;
+while (i < 2) {
+  let captured = i * 10;
+  fn f() { return captured; }
+  if (i == 0) { first = f; } else { second = f; }
+  i = i + 1;
+}
+print first();    // expect: 0
+print second();   // expect: 10

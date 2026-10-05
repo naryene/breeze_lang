@@ -1,0 +1,14 @@
+fn a() {
+  let f;
+  {
+    let x = "deep";
+    fn b() {
+      fn c() { return x; }
+      return c;
+    }
+    f = b;
+  }
+  let junk = 0;
+  return f;
+}
+print a()()();   // expect: deep

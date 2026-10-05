@@ -315,7 +315,7 @@ static int32_t resolve_upvalue(Compiler *compiler, const Token *name) {
 
   int32_t local_idx = resolve_local(compiler->enclosing, name);
   if (local_idx != -1) {
-    compiler->enclosing->locals[local_idx].is_captured = false;
+    compiler->enclosing->locals[local_idx].is_captured = true;
     return add_upvalue(compiler, local_idx, true);
   }
 
