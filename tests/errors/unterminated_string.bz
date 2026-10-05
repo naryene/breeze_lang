@@ -1,0 +1,2 @@
+let s = "never closed;
+// expect compile error: Error: Unterminated string.

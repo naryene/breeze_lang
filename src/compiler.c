@@ -119,7 +119,9 @@ static void advance() {
     if (parser.current.type != TokenError) {
       break;
     }
-    error(parser.current.start);
+    // The error token is `current`, and its text is the scanner's message,
+    // not a format string.
+    error_at(&parser.current, parser.current.start);
   }
 }
 
