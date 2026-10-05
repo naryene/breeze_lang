@@ -8,6 +8,8 @@
 #                                     (repeatable: every line must appear)
 #   // repl                           feed the script to the REPL on stdin
 #                                     (prompts are stripped from stdout)
+#   // stress-gc                      run with a build that collects garbage
+#                                     on every allocation (DEBUG_STRESS_GC)
 #
 # Any AddressSanitizer / UBSan / LeakSanitizer report fails the test.
 #
@@ -20,18 +22,26 @@ set -u
 root="$(cd "$(dirname "$0")/.." && pwd)"
 filter="${1:-}"
 
-if [[ -z "${BREEZE:-}" ]]; then
-  BREEZE="$root/build/breeze-test"
+# build <output> [extra cflags...]
+build() {
+  local out="$1"
+  shift
   mkdir -p "$root/build"
   # shellcheck disable=SC2086
   if ! gcc -std=c2x -Wall -Wextra -g -fsanitize=address,undefined \
-      -fno-sanitize-recover=undefined ${CFLAGS_EXTRA:-} \
-      -I"$root/src" "$root"/src/*.c -o "$BREEZE" 2> "$root/build/test-build.log"; then
+      -fno-sanitize-recover=undefined ${CFLAGS_EXTRA:-} "$@" \
+      -I"$root/src" "$root"/src/*.c -o "$out" 2> "$root/build/test-build.log"; then
     cat "$root/build/test-build.log" >&2
     echo "build failed" >&2
     exit 1
   fi
+}
+
+if [[ -z "${BREEZE:-}" ]]; then
+  BREEZE="$root/build/breeze-test"
+  build "$BREEZE"
 fi
+BREEZE_STRESS="${BREEZE_STRESS:-}"
 
 export ASAN_OPTIONS="detect_leaks=1:abort_on_error=0"
 export UBSAN_OPTIONS="print_stacktrace=1"
@@ -52,16 +62,25 @@ while IFS= read -r test; do
   [[ -n "$runtime_err" ]] && expected_code=70
   [[ -n "$compile_err" ]] && expected_code=65
 
+  bin="$BREEZE"
+  if grep -q '^// stress-gc' "$test"; then
+    if [[ -z "$BREEZE_STRESS" ]]; then
+      BREEZE_STRESS="$root/build/breeze-test-stress"
+      build "$BREEZE_STRESS" -DDEBUG_STRESS_GC
+    fi
+    bin="$BREEZE_STRESS"
+  fi
+
   out_file="$(mktemp)"
   err_file="$(mktemp)"
   if grep -q '^// repl' "$test"; then
-    "$BREEZE" < "$test" > "$out_file" 2> "$err_file"
+    "$bin" < "$test" > "$out_file" 2> "$err_file"
     code=$?
     # REPL mode never exits with an error code; strip the ">> " prompts.
     expected_code=0
     actual_out="$(sed -E 's/^(>> )+//' "$out_file" | sed '/^$/d')"
   else
-    "$BREEZE" "$test" > "$out_file" 2> "$err_file"
+    "$bin" "$test" > "$out_file" 2> "$err_file"
     code=$?
     actual_out="$(cat "$out_file")"
   fi

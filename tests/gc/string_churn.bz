@@ -1,0 +1,14 @@
+// stress-gc
+// Creates and drops many interned strings so the weak string table must
+// evict dead entries.
+let keep = "";
+let i = 0;
+while (i < 300) {
+  let tmp = "t" + "e" + "m" + "p";
+  keep = keep + "x";
+  i = i + 1;
+}
+let a = "te" + "mp";
+print a == "temp";        // expect: true
+print keep == keep + "";  // expect: true
+print "x" + "y";          // expect: xy
