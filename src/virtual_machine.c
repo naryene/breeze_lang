@@ -145,8 +145,14 @@ static bool call_value(Value callee, uint8_t args_len) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
     case ObjClassType: {
+      // No initializers yet, so a class takes no arguments. Rejecting them
+      // also keeps the stack balanced: the instance replaces the callee slot.
+      if (args_len != 0) {
+        runtime_error("Expected 0 arguments but got %d.", args_len);
+        return false;
+      }
       ObjClass *klass = (ObjClass *)AS_OBJ(callee);
-      vm.stack_ptr[-(args_len + 1)] = OBJ_VAL(new_instance(klass));
+      vm.stack_ptr[-1] = OBJ_VAL(new_instance(klass));
       return true;
     }
     case ObjClosureType: {

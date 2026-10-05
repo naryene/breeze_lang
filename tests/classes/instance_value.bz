@@ -1,0 +1,6 @@
+class A { let v; }
+fn make() { return A(); }
+let a = make();
+a.v = "ok";
+print a;     // expect: instance of <class A>
+print a.v;   // expect: ok
