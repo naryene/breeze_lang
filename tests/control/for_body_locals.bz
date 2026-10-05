@@ -1,0 +1,27 @@
+for (let i = 0; i < 3; i = i + 1) {
+  let x = i * 10;
+  print x;
+}
+// expect: 0
+// expect: 10
+// expect: 20
+
+fn f() {
+  let total = 0;
+  for (let i = 0; i < 4; i = i + 1) {
+    let step = i;
+    total = total + step;
+  }
+  return total;
+}
+print f();   // expect: 6
+
+let fns_a;
+let fns_b;
+for (let i = 0; i < 2; i = i + 1) {
+  let v = i + 100;
+  fn get() { return v; }
+  if (i == 0) { fns_a = get; } else { fns_b = get; }
+}
+print fns_a();   // expect: 100
+print fns_b();   // expect: 101

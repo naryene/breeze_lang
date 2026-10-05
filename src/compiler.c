@@ -881,7 +881,9 @@ static void for_statement() {
   }
 
   consume_token(TokenLeftBrace, "Expect '{' after 'for' statement.");
-  block();
+  // The body needs its own scope so its locals are popped (or closed) at the
+  // end of every iteration, not once after the whole loop.
+  scoped_block();
   emit_loop(loop_start);
 
   if (exit_jmp != -1) {
