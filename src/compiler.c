@@ -999,12 +999,10 @@ ObjFunction *compile(const char *source) {
   while (!match_token(TokenEof)) {
     declaration();
   }
-  if (parser.had_error) {
-    return NULL;
-  }
+  // Always unwind through end_compiler(): returning early would leave
+  // current_compiler pointing at this stack frame after compile() returns.
   ObjFunction *function = end_compiler();
-
-  return function;
+  return parser.had_error ? NULL : function;
 }
 
 void mark_compiler_roots() {
