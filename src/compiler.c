@@ -296,7 +296,7 @@ static int32_t add_upvalue(Compiler *compiler, const size_t index,
     }
   }
 
-  if (upvalues_len == UINT16_COUNT) {
+  if (upvalues_len == UINT8_COUNT) {
     error("Too many closure variables in function.");
     return 0;
   }
@@ -352,11 +352,10 @@ static void emit_variable_operation(const Token *name, bool can_assign) {
 }
 
 static void add_local(const Token *name) {
-  // My version is able to contain more local
-  // variables, but i'm trying to do same as clox
-  // for now
-  if (current_compiler->locals_len == UINT16_COUNT) {
-    error("Too many local variabls in function.");
+  // Bounded by the size of `locals[]` and by STACK_MAX, which reserves
+  // UINT8_COUNT slots per call frame.
+  if (current_compiler->locals_len == UINT8_COUNT) {
+    error("Too many local variables in function.");
     return;
   }
   Local *local = &current_compiler->locals[current_compiler->locals_len];
