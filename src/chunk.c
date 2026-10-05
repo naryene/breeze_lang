@@ -40,18 +40,16 @@ uint32_t get_line(const LineVec *line_vec, uint32_t inst) {
   if (line_vec->len == 0) {
     return 0;
   }
-  int32_t start = 0;
-  int32_t end = line_vec->len - 1;
+  // Entry i covers offsets (lines[i - 1][1], lines[i][1]], so the owner of
+  // `inst` is the first entry whose last offset is >= inst (lower bound).
+  uint32_t start = 0;
+  uint32_t end = line_vec->len - 1;
   while (start < end) {
-    int32_t mid = start + (end - start) / 2;
-    Line *line = &line_vec->lines[mid];
-
-    if (inst < (*line)[1]) {
-      end = mid - 1;
-    } else if (inst < line_vec->lines[mid + 1][1]) {
-      return line_vec->lines[mid + 1][0];
-    } else {
+    uint32_t mid = start + (end - start) / 2;
+    if (line_vec->lines[mid][1] < inst) {
       start = mid + 1;
+    } else {
+      end = mid;
     }
   }
   return line_vec->lines[start][0];

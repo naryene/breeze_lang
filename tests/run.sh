@@ -5,6 +5,7 @@
 #   // expect: <line>                 expected stdout line (in order)
 #   // expect runtime error: <text>   stderr must contain <text>, exit code 70
 #   // expect compile error: <text>   stderr must contain <text>, exit code 65
+#                                     (repeatable: every line must appear)
 #   // repl                           feed the script to the REPL on stdin
 #                                     (prompts are stripped from stdout)
 #
@@ -44,8 +45,8 @@ while IFS= read -r test; do
   [[ -n "$filter" && "$rel" != *"$filter"* ]] && continue
 
   expected_out="$(sed -n 's|.*// expect: \(.*\)$|\1|p' "$test")"
-  runtime_err="$(sed -n 's|.*// expect runtime error: \(.*\)$|\1|p' "$test" | head -n1)"
-  compile_err="$(sed -n 's|.*// expect compile error: \(.*\)$|\1|p' "$test" | head -n1)"
+  runtime_err="$(sed -n 's|.*// expect runtime error: \(.*\)$|\1|p' "$test")"
+  compile_err="$(sed -n 's|.*// expect compile error: \(.*\)$|\1|p' "$test")"
 
   expected_code=0
   [[ -n "$runtime_err" ]] && expected_code=70
@@ -77,12 +78,15 @@ while IFS= read -r test; do
   if [[ "$actual_out" != "$expected_out" ]]; then
     problems+=("stdout mismatch")
   fi
-  if [[ -n "$runtime_err" && "$actual_err" != *"$runtime_err"* ]]; then
-    problems+=("missing runtime error: $runtime_err")
-  fi
-  if [[ -n "$compile_err" && "$actual_err" != *"$compile_err"* ]]; then
-    problems+=("missing compile error: $compile_err")
-  fi
+  # Every expected error line must appear somewhere in stderr.
+  while IFS= read -r want; do
+    [[ -n "$want" && "$actual_err" != *"$want"* ]] &&
+      problems+=("missing runtime error: $want")
+  done <<< "$runtime_err"
+  while IFS= read -r want; do
+    [[ -n "$want" && "$actual_err" != *"$want"* ]] &&
+      problems+=("missing compile error: $want")
+  done <<< "$compile_err"
 
   if [[ ${#problems[@]} -eq 0 ]]; then
     pass=$((pass + 1))

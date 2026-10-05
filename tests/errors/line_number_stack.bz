@@ -1,0 +1,14 @@
+fn inner() {
+  let x = 1;
+  return x + "boom";   // expect runtime error: [line 3] in inner()
+}
+
+fn outer() {
+  let y = 2;
+  let z = 3;
+  return inner();
+}
+
+print "before";        // expect: before
+outer();
+// expect runtime error: [line 9] in outer()
