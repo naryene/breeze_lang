@@ -241,8 +241,11 @@ static InterpretResult run() {
     if (inst == OpConst) {                                                     \
       idx = (uint32_t)READ_BYTE();                                             \
     } else {                                                                   \
-      idx = (uint32_t)((READ_BYTE()) | (READ_BYTE() << 8) |                    \
-                       (READ_BYTE() << 16));                                   \
+      /* Separate statements: the operands of `|` are unsequenced, so      \
+       * three READ_BYTE()s in one expression may run in any order. */      \
+      idx = (uint32_t)READ_BYTE();                                             \
+      idx |= (uint32_t)READ_BYTE() << 8;                                       \
+      idx |= (uint32_t)READ_BYTE() << 16;                                      \
     }                                                                          \
     idx;                                                                       \
   })
