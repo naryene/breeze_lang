@@ -43,6 +43,9 @@ typedef enum {
   OpClass,
 } OpCode;
 
+/* Largest index an operand can hold: OpConstLong encodes 24 bits. */
+#define MAX_OPERAND_IDX 0xFFFFFFu
+
 /***
   line[0]: line number;
   line[1]: index of the last code that is in that line
@@ -69,7 +72,6 @@ void init_chunk(Chunk *chunk);
 void free_chunk(Chunk *chunk);
 void write_chunk(Chunk *chunk, uint8_t byte, uint32_t line);
 uint32_t add_constant(Chunk *chunk, Value value);
-uint32_t push_constant(Chunk *chunk, Value value, uint32_t line);
 void write_constant_chunk(Chunk *chunk, uint32_t constant, uint32_t line);
 
 #endif // !breeze_chunk_h

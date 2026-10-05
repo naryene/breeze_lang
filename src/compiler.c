@@ -145,7 +145,7 @@ static bool match_token(TokenType type) {
 }
 
 static bool max_constants_error(const uint32_t idx) {
-  if (idx > UINT16_MAX) {
+  if (idx > MAX_OPERAND_IDX) {
     error("Too many constants in one chunk.");
     return true;
   }
@@ -169,7 +169,8 @@ static void emit_return() { emit_word(OpNull, OpRet); }
 static uint32_t emit_constant_array(const Value value) {
   uint32_t idx = add_constant(current_chunk(), value);
   if (max_constants_error(idx)) {
-    exit(1);
+    // The error is recorded; compile() returns NULL once parsing finishes.
+    return 0;
   }
   return idx;
 }
