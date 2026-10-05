@@ -662,7 +662,7 @@ static void unary(bool can_assign) {
 static void and_and_(bool can_assign) {
   int32_t end_jmp = emit_jmp(OpJmpIfFalse);
 
-  emit_jmp(OpPop);
+  emit_byte(OpPop);
   parse_precedence(PrecAndAnd);
 
   patch_jmp(end_jmp);

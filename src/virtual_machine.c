@@ -530,6 +530,10 @@ static InterpretResult run() {
       frame = &vm.frames[vm.frames_len - 1];
       break;
     }
+    default: {
+      runtime_error("Unknown opcode %d.", inst);
+      return InterpretRuntimeErr;
+    }
     }
   }
 #undef READ_BYTE
