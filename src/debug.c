@@ -101,9 +101,10 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
     ObjFunction *function = AS_FUNCTION(chunk->constants.values[constant_idx]);
     for (uint32_t i = 0; i < function->upvalues_len; i += 1) {
       bool is_local = chunk->code[offset];
-      offset = read_idx(chunk, offset + 1, &constant_idx);
-      printf("%04d    |             %s %d\n", offset - 2,
-             is_local ? "local" : "upvalue", constant_idx);
+      uint8_t index = chunk->code[offset + 1];
+      printf("%04d    |             %s %d\n", offset,
+             is_local ? "local" : "upvalue", index);
+      offset += 2;
     }
     return offset;
   }
@@ -115,6 +116,8 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
     return jmp_inst("OpJmp", chunk, offset);
   case OpJmpIfFalse:
     return jmp_inst("OpJmpIfFalse", chunk, offset);
+  case OpJmpIfFalsePop:
+    return jmp_inst("OpJmpIfFalsePop", chunk, offset);
   case OpConst:
     return constant_inst("OpConst", chunk, offset, NULL);
   case OpConstLong:
@@ -136,13 +139,17 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   case OpSetGlobal:
     return special_inst("OpSetGlobal", chunk, offset, NULL);
   case OpGetUpvalue:
-    return special_inst("OpGetUpvalue", chunk, offset, NULL);
+    return byte_inst("OpGetUpvalue", chunk, offset);
   case OpSetUpvalue:
-    return special_inst("OpSetUpvalue", chunk, offset, NULL);
+    return byte_inst("OpSetUpvalue", chunk, offset);
   case OpGetLocal:
-    return special_inst("OpGetLocal", chunk, offset, NULL);
+    return byte_inst("OpGetLocal", chunk, offset);
+  case OpSetUpvaluePop:
+    return byte_inst("OpSetUpvaluePop", chunk, offset);
+  case OpSetLocalPop:
+    return byte_inst("OpSetLocalPop", chunk, offset);
   case OpSetLocal:
-    return special_inst("OpSetLocal", chunk, offset, NULL);
+    return byte_inst("OpSetLocal", chunk, offset);
   case OpDefineProperty:
     return special_inst("OpDefineProperty", chunk, offset, NULL);
   case OpGetProperty:

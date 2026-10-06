@@ -1,0 +1,22 @@
+// The jump that skips the right-hand side lands exactly where the statement's
+// pop would go. Fusing the assignment there would leave `true` on the stack
+// and shift every later local by one slot.
+fn f() {
+  let x = false;
+  true || (x = true);
+  false && (x = true);
+  let y = "y";
+  print x;   // expect: false
+  print y;   // expect: y
+}
+f();
+
+fn g() {
+  let z = 0;
+  let hit = false;
+  false || (hit = true);
+  z = 5;
+  print hit;   // expect: true
+  print z;     // expect: 5
+}
+g();

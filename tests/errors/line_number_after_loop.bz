@@ -1,0 +1,13 @@
+fn check(n) {
+  if (n == 3) { return n + "x"; }
+  return n;
+}
+
+let i = 0;
+while (i < 5) {
+  check(i);
+  i = i + 1;
+}
+// expect runtime error: Operands must be two numbers or two strings.
+// expect runtime error: [line 2] in check()
+// expect runtime error: [line 8] in script

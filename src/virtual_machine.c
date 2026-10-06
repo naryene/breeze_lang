@@ -218,14 +218,6 @@ static void define_method(ObjString *name){
   pop_stack();
 }
 
-static InterpretResult check_bool(Value value) {
-  if (!IS_BOOL(value)) {
-    runtime_error("Operand must be a boolean.");
-    return InterpretRuntimeErr;
-  }
-  return InterpretOk;
-}
-
 static void concat() {
   ObjString *right = AS_STRING(peek_stack(0));
   ObjString *left = AS_STRING(peek_stack(1));
@@ -242,305 +234,412 @@ static void concat() {
   push_stack(OBJ_VAL(result));
 }
 
-static inline uint8_t read_byte(CallFrame *frame) {
-  frame->inst_ptr += 1;
-  return frame->inst_ptr[-1];
-}
+// Branch hint for error paths in the dispatch loop: keeps them out of the
+// hot instruction stream.
+#if defined(__GNUC__)
+#define UNLIKELY(condition) __builtin_expect(!!(condition), 0)
+#else
+#define UNLIKELY(condition) (condition)
+#endif
 
-// Reads an index operand whose width is given by the prefix opcode that was
-// just read: OpConst -> 1 byte, OpConstLong -> 3 bytes (little-endian).
-static inline uint32_t read_idx(CallFrame *frame, uint8_t width_op) {
-  if (width_op == OpConst) {
-    return read_byte(frame);
+#if defined(__GNUC__) && !defined(BREEZE_SWITCH_DISPATCH)
+#define BREEZE_COMPUTED_GOTO 1
+#else
+#define BREEZE_COMPUTED_GOTO 0
+#endif
+
+#ifdef DEBUG_TRACE_EXECUTION
+static void trace_execution(CallFrame *frame, uint8_t *ip) {
+  printf("        ");
+  for (Value *stack_slot = vm.stack; stack_slot < vm.stack_ptr;
+       stack_slot += 1) {
+    printf("[ ");
+    print_value(*stack_slot);
+    printf(" ]");
   }
-  uint32_t idx = read_byte(frame);
-  idx |= (uint32_t)read_byte(frame) << 8;
-  idx |= (uint32_t)read_byte(frame) << 16;
-  return idx;
+  printf("\n");
+  Chunk *chunk = &frame->closure->function->chunk;
+  disassemble_inst(chunk, (uint32_t)(ip - chunk->code));
 }
+#define TRACE() trace_execution(frame, ip)
+#else
+#define TRACE() ((void)0)
+#endif
 
-static inline ObjString *read_string(CallFrame *frame) {
-  uint32_t idx = read_idx(frame, read_byte(frame));
-  return AS_STRING(frame->closure->function->chunk.constants.values[idx]);
-}
+#if BREEZE_COMPUTED_GOTO
+// Labels as values (`&&label`, `goto *ptr`) are a GNU extension, so silence
+// -Wpedantic for the dispatch loop only. The table's range initializer is
+// deliberately overridden per opcode, hence -Woverride-init.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Woverride-init"
+#endif
 
 static InterpretResult run() {
-  /*** MACROS DEFINITION ***/
-  CallFrame *frame = &vm.frames[vm.frames_len - 1];
+  CallFrame *frame;
+  uint8_t *ip;
+  uint8_t inst;
 
-#define READ_BYTE() (frame->inst_ptr += 1, *(frame->inst_ptr - 1))
+// The instruction pointer lives in a local so gcc can keep it in a register.
+// frame->inst_ptr is only current after SAVE_IP(), so call SAVE_IP() before
+// anything that reads it: call_value() (the new frame's caller resumes from
+// it) and runtime_error() (the trace walks every frame) -- RUNTIME_ERROR()
+// does the latter for you.
+#define LOAD_FRAME()                                                           \
+  (frame = &vm.frames[vm.frames_len - 1], ip = frame->inst_ptr)
+#define SAVE_IP() (frame->inst_ptr = ip)
+#define CODE() (frame->closure->function->chunk.code)
+
+#define READ_BYTE() (ip += 1, ip[-1])
+#define READ_WORD() (ip += 2, (uint16_t)(ip[-2] | (ip[-1] << 8)))
+// Index operand whose width is selected by the prefix opcode just read:
+// OpConst -> 1 byte, OpConstLong -> 3 bytes little-endian. The long branch
+// advances ip first and then reads fixed offsets, so no read is unsequenced
+// with the increment.
+#define READ_IDX(width_op)                                                     \
+  ((width_op) == OpConst                                                       \
+       ? (ip += 1, (uint32_t)ip[-1])                                           \
+       : (ip += 3, (uint32_t)ip[-3] | ((uint32_t)ip[-2] << 8) |                \
+                       ((uint32_t)ip[-1] << 16)))
 #define READ_VALUE(idx) (frame->closure->function->chunk.constants.values[idx])
+#define READ_CONSTANT(width_op) READ_VALUE(READ_IDX(width_op))
+#define READ_STRING() AS_STRING(READ_CONSTANT(READ_BYTE()))
 
-#define READ_WORD()                                                            \
-  (frame->inst_ptr += 2,                                                       \
-   (uint16_t)(frame->inst_ptr[-2] | (frame->inst_ptr[-1] << 8)))
+#define RUNTIME_ERROR(...)                                                     \
+  do {                                                                         \
+    SAVE_IP();                                                                 \
+    runtime_error(__VA_ARGS__);                                                \
+    return InterpretRuntimeErr;                                                \
+  } while (false)
 
-#define READ_IDX(width_op) read_idx(frame, width_op)
-#define READ_CONSTANT(width_op) (READ_VALUE(READ_IDX(width_op)))
-#define READ_STRING() read_string(frame)
+// Pushes inside run() check for overflow here rather than in push_stack(),
+// so the error goes through RUNTIME_ERROR and the trace sees the current ip.
+// The value goes into a temporary first: it may itself pop (e.g. OpNeg), and
+// `*vm.stack_ptr = pop_stack()` would read and write stack_ptr unsequenced.
+#define PUSH(value)                                                            \
+  do {                                                                         \
+    Value pushed = (value);                                                    \
+    if (UNLIKELY(vm.stack_ptr >= vm.stack + STACK_MAX)) {                      \
+      RUNTIME_ERROR("Stack overflow.");                                        \
+    }                                                                          \
+    *vm.stack_ptr = pushed;                                                    \
+    vm.stack_ptr += 1;                                                         \
+  } while (false)
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
     if (!IS_NUMBER(peek_stack(0)) || !IS_NUMBER(peek_stack(1))) {              \
-      runtime_error("Operands must be numbers.");                              \
-      return InterpretRuntimeErr;                                              \
+      RUNTIME_ERROR("Operands must be numbers.");                              \
     }                                                                          \
     double right = AS_NUMBER(pop_stack());                                     \
     double left = AS_NUMBER(pop_stack());                                      \
-    push_stack(value_type(left op right));                                     \
+    PUSH(value_type(left op right));                                     \
   } while (false)
 
-  /*** MACROS DEFINITION ***/
+#if BREEZE_COMPUTED_GOTO
+  // One handler address per opcode; every unlisted byte is an unknown opcode.
+  // A handler label without a table entry triggers -Wunused-label, and a
+  // table entry without a label is a compile error, so the two lists cannot
+  // silently drift apart.
+  static void *dispatch_table[256] = {
+      [0 ... 255] = &&op_unknown,
+      [OpRet] = &&op_OpRet,
+      [OpConst] = &&op_OpConst,
+      [OpConstLong] = &&op_OpConstLong,
+      [OpNull] = &&op_OpNull,
+      [OpTrue] = &&op_OpTrue,
+      [OpFalse] = &&op_OpFalse,
+      [OpNot] = &&op_OpNot,
+      [OpNeg] = &&op_OpNeg,
+      [OpEq] = &&op_OpEq,
+      [OpGt] = &&op_OpGt,
+      [OpLt] = &&op_OpLt,
+      [OpAdd] = &&op_OpAdd,
+      [OpSub] = &&op_OpSub,
+      [OpMul] = &&op_OpMul,
+      [OpDiv] = &&op_OpDiv,
+      [OpPrint] = &&op_OpPrint,
+      [OpPop] = &&op_OpPop,
+      [OpMethod] = &&op_OpMethod,
+      [OpDefineProperty] = &&op_OpDefineProperty,
+      [OpSetProperty] = &&op_OpSetProperty,
+      [OpGetProperty] = &&op_OpGetProperty,
+      [OpDefineGlobal] = &&op_OpDefineGlobal,
+      [OpSetGlobal] = &&op_OpSetGlobal,
+      [OpGetGlobal] = &&op_OpGetGlobal,
+      [OpCloseUpvalue] = &&op_OpCloseUpvalue,
+      [OpSetUpvalue] = &&op_OpSetUpvalue,
+      [OpSetUpvaluePop] = &&op_OpSetUpvaluePop,
+      [OpGetUpvalue] = &&op_OpGetUpvalue,
+      [OpSetLocal] = &&op_OpSetLocal,
+      [OpSetLocalPop] = &&op_OpSetLocalPop,
+      [OpGetLocal] = &&op_OpGetLocal,
+      [OpJmpIfFalse] = &&op_OpJmpIfFalse,
+      [OpJmpIfFalsePop] = &&op_OpJmpIfFalsePop,
+      [OpJmp] = &&op_OpJmp,
+      [OpClosure] = &&op_OpClosure,
+      [OpCall] = &&op_OpCall,
+      [OpClass] = &&op_OpClass,
+  };
+#define CASE(op) op_##op:
+#define DISPATCH()                                                             \
+  do {                                                                         \
+    TRACE();                                                                   \
+    inst = READ_BYTE();                                                        \
+    goto *dispatch_table[inst];                                                \
+  } while (false)
+#define UNKNOWN_CASE op_unknown:
+#else
+#define CASE(op) case op:
+#define DISPATCH() break
+#define UNKNOWN_CASE default:
+#endif
 
+  LOAD_FRAME();
+
+#if BREEZE_COMPUTED_GOTO
+  DISPATCH();
+#else
   while (true) {
-
-#ifdef DEBUG_TRACE_EXECUTION
-    printf("        ");
-    for (Value *stack_slot = vm.stack; stack_slot < vm.stack_ptr;
-         stack_slot += 1) {
-      printf("[ ");
-      print_value(*stack_slot);
-      printf(" ]");
-    }
-    printf("\n");
-    disassemble_inst(
-        &frame->closure->function->chunk,
-        (uint32_t)(frame->inst_ptr - frame->closure->function->chunk.code));
-#endif /* DEBUG_TRACE_EXECUTION */
-    uint8_t inst;
+    TRACE();
     switch (inst = READ_BYTE()) {
-    case OpConst:
-    case OpConstLong: {
-      Value constant = READ_CONSTANT(inst);
-      push_stack(constant);
-      break;
+#endif
+
+    CASE(OpConst)
+    CASE(OpConstLong) {
+      PUSH(READ_CONSTANT(inst));
+      DISPATCH();
     }
-    case OpNull: {
-      push_stack(NULL_VAL);
-      break;
+    CASE(OpNull) {
+      PUSH(NULL_VAL);
+      DISPATCH();
     }
-    case OpTrue: {
-      push_stack(BOOL_VAL(true));
-      break;
+    CASE(OpTrue) {
+      PUSH(BOOL_VAL(true));
+      DISPATCH();
     }
-    case OpFalse: {
-      push_stack(BOOL_VAL(false));
-      break;
+    CASE(OpFalse) {
+      PUSH(BOOL_VAL(false));
+      DISPATCH();
     }
-    case OpDefineGlobal: {
+    CASE(OpDefineGlobal) {
       ObjString *name = READ_STRING();
       table_insert(&vm.globals, name, peek_stack(0));
       pop_stack();
-      break;
+      DISPATCH();
     }
-    case OpSetGlobal: {
+    CASE(OpSetGlobal) {
       ObjString *name = READ_STRING();
       if (table_insert(&vm.globals, name, peek_stack(0))) {
         table_remove(&vm.globals, name);
-        runtime_error("Undefined variable '%s'.", name->chars);
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Undefined variable '%s'.", name->chars);
       }
-      break;
+      DISPATCH();
     }
-    case OpGetGlobal: {
+    CASE(OpGetGlobal) {
       ObjString *name = READ_STRING();
       Value value;
       if (!table_get(&vm.globals, name, &value)) {
-        runtime_error("Undefined variable '%s'.", name->chars);
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Undefined variable '%s'.", name->chars);
       }
-      push_stack(value);
-      break;
+      PUSH(value);
+      DISPATCH();
     }
-    case OpSetLocal: {
-      uint32_t local_stack_idx = READ_IDX(READ_BYTE());
-      frame->frame_ptr[local_stack_idx] = peek_stack(0);
-      break;
+    CASE(OpSetLocal) {
+      uint8_t slot = READ_BYTE();
+      frame->frame_ptr[slot] = peek_stack(0);
+      DISPATCH();
     }
-    case OpGetLocal: {
-      uint32_t local_stack_idx = READ_IDX(READ_BYTE());
-      push_stack(frame->frame_ptr[local_stack_idx]);
-      break;
+    CASE(OpSetLocalPop) {
+      uint8_t slot = READ_BYTE();
+      frame->frame_ptr[slot] = pop_stack();
+      DISPATCH();
     }
-    case OpSetUpvalue: {
-      uint32_t upvalue_idx = READ_IDX(READ_BYTE());
-      *frame->closure->upvalues[upvalue_idx]->location = peek_stack(0);
-      break;
+    CASE(OpGetLocal) {
+      uint8_t slot = READ_BYTE();
+      PUSH(frame->frame_ptr[slot]);
+      DISPATCH();
     }
-    case OpGetUpvalue: {
-      uint32_t upvalue_idx = READ_IDX(READ_BYTE());
-      push_stack(*frame->closure->upvalues[upvalue_idx]->location);
-      break;
+    CASE(OpSetUpvalue) {
+      uint8_t slot = READ_BYTE();
+      *frame->closure->upvalues[slot]->location = peek_stack(0);
+      DISPATCH();
     }
-    case OpDefineProperty: {
+    CASE(OpSetUpvaluePop) {
+      uint8_t slot = READ_BYTE();
+      *frame->closure->upvalues[slot]->location = pop_stack();
+      DISPATCH();
+    }
+    CASE(OpGetUpvalue) {
+      uint8_t slot = READ_BYTE();
+      PUSH(*frame->closure->upvalues[slot]->location);
+      DISPATCH();
+    }
+    CASE(OpDefineProperty) {
       ObjClass *klass = AS_CLASS(peek_stack(0));
       ObjString *name = READ_STRING();
-
       if (set_contains(&klass->fields, name)) {
-        runtime_error("Field %s is already defined.", name->chars);
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Field %s is already defined.", name->chars);
       }
       set_insert(&klass->fields, name);
-
-
-      break;
+      DISPATCH();
     }
-    case OpSetProperty: {
+    CASE(OpSetProperty) {
       if (!IS_INSTANCE(peek_stack(1))) {
-        runtime_error("Properties are defined for instances only.");
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Properties are defined for instances only.");
       }
-
       ObjInstance *instance = AS_INSTANCE(peek_stack(1));
       ObjString *name = READ_STRING();
-
       if (!set_contains(&instance->klass->fields, name)) {
-        runtime_error("Undefined property '%s'.", name->chars);
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Undefined property '%s'.", name->chars);
       }
-
       table_insert(&instance->fields, name, peek_stack(0));
       Value value = pop_stack();
       pop_stack();
-      push_stack(value);
-      break;
+      PUSH(value);
+      DISPATCH();
     }
-    case OpGetProperty: {
+    CASE(OpGetProperty) {
       if (!IS_INSTANCE(peek_stack(0))) {
-        runtime_error("Properties are defined for instances only.");
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Properties are defined for instances only.");
       }
-
       ObjInstance *instance = AS_INSTANCE(peek_stack(0));
       ObjString *name = READ_STRING();
-
       Value value;
-      if (table_get(&instance->fields, name, &value)) {
-        pop_stack();
-        push_stack(value);
-        break;
+      if (!table_get(&instance->fields, name, &value)) {
+        RUNTIME_ERROR("Undefined property '%s'", name->chars);
       }
-      runtime_error("Undefined property '%s'", name->chars);
-      return InterpretRuntimeErr;
+      pop_stack();
+      PUSH(value);
+      DISPATCH();
     }
-    case OpEq: {
+    CASE(OpEq) {
       Value right = pop_stack();
       Value left = pop_stack();
-      push_stack(BOOL_VAL(values_equal(left, right)));
-      break;
+      PUSH(BOOL_VAL(values_equal(left, right)));
+      DISPATCH();
     }
-    case OpLt: {
+    CASE(OpLt) {
       BINARY_OP(BOOL_VAL, <);
-      break;
+      DISPATCH();
     }
-    case OpGt: {
+    CASE(OpGt) {
       BINARY_OP(BOOL_VAL, >);
-      break;
+      DISPATCH();
     }
-    case OpAdd: {
+    CASE(OpAdd) {
       if (IS_STRING(peek_stack(0)) && IS_STRING(peek_stack(1))) {
         concat();
       } else if (IS_NUMBER(peek_stack(0)) && IS_NUMBER(peek_stack(1))) {
         double right = AS_NUMBER(pop_stack());
         double left = AS_NUMBER(pop_stack());
-        push_stack(NUMBER_VAL(left + right));
+        PUSH(NUMBER_VAL(left + right));
       } else {
-        runtime_error("Operands must be two numbers or two strings.");
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Operands must be two numbers or two strings.");
       }
-      break;
+      DISPATCH();
     }
-    case OpSub: {
+    CASE(OpSub) {
       BINARY_OP(NUMBER_VAL, -);
-      break;
+      DISPATCH();
     }
-    case OpMul: {
+    CASE(OpMul) {
       BINARY_OP(NUMBER_VAL, *);
-      break;
+      DISPATCH();
     }
-    case OpDiv: {
+    CASE(OpDiv) {
       BINARY_OP(NUMBER_VAL, /);
-      break;
+      DISPATCH();
     }
-    case OpNeg: {
+    CASE(OpNeg) {
       if (!IS_NUMBER(peek_stack(0))) {
-        runtime_error("Operand must be a number.");
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Operand must be a number.");
       }
-      push_stack(NUMBER_VAL(-AS_NUMBER(pop_stack())));
-      break;
+      PUSH(NUMBER_VAL(-AS_NUMBER(pop_stack())));
+      DISPATCH();
     }
-    case OpNot: {
-      InterpretResult check_result = check_bool(peek_stack(0));
-      if (check_result == InterpretRuntimeErr) {
-        return check_result;
+    CASE(OpNot) {
+      if (!IS_BOOL(peek_stack(0))) {
+        RUNTIME_ERROR("Operand must be a boolean.");
       }
-
-      push_stack(BOOL_VAL(!AS_BOOL(pop_stack())));
-      break;
+      PUSH(BOOL_VAL(!AS_BOOL(pop_stack())));
+      DISPATCH();
     }
-    case OpPrint: {
+    CASE(OpPrint) {
       print_value(pop_stack());
       printf("\n");
-      break;
+      DISPATCH();
     }
-    case OpPop: {
+    CASE(OpPop) {
       pop_stack();
-      break;
+      DISPATCH();
     }
-    case OpJmpIfFalse: {
-      uint16_t offset = READ_WORD();
-      InterpretResult check_result = check_bool(peek_stack(0));
-      if (check_result == InterpretRuntimeErr) {
-        return check_result;
+    CASE(OpJmpIfFalse) {
+      uint16_t target = READ_WORD();
+      if (!IS_BOOL(peek_stack(0))) {
+        RUNTIME_ERROR("Operand must be a boolean.");
       }
-      if (AS_BOOL(peek_stack(0)) == false) {
-        frame->inst_ptr = frame->closure->function->chunk.code + offset;
+      if (!AS_BOOL(peek_stack(0))) {
+        ip = CODE() + target;
       }
-      break;
+      DISPATCH();
     }
-    case OpJmp: {
-      uint16_t offset = READ_WORD();
-      frame->inst_ptr = frame->closure->function->chunk.code + offset;
-      break;
+    CASE(OpJmpIfFalsePop) {
+      uint16_t target = READ_WORD();
+      Value condition = pop_stack();
+      if (!IS_BOOL(condition)) {
+        RUNTIME_ERROR("Operand must be a boolean.");
+      }
+      if (!AS_BOOL(condition)) {
+        ip = CODE() + target;
+      }
+      DISPATCH();
     }
-    case OpCall: {
+    CASE(OpJmp) {
+      // Read into a temporary: `ip = CODE() + READ_WORD()` would modify ip
+      // twice without a sequence point.
+      uint16_t target = READ_WORD();
+      ip = CODE() + target;
+      DISPATCH();
+    }
+    CASE(OpCall) {
       uint8_t args_len = READ_BYTE();
+      SAVE_IP();
       if (!call_value(peek_stack(args_len), args_len)) {
         return InterpretRuntimeErr;
       }
-      frame = &vm.frames[vm.frames_len - 1];
-      break;
+      LOAD_FRAME();
+      DISPATCH();
     }
-      case OpMethod: {
-        define_method(READ_STRING());
-        break;
-      }
-    case OpClosure: {
+    CASE(OpMethod) {
+      define_method(READ_STRING());
+      DISPATCH();
+    }
+    CASE(OpClosure) {
       ObjFunction *function = AS_FUNCTION(READ_CONSTANT(READ_BYTE()));
       ObjClosure *closure = new_closure(function);
-      push_stack(OBJ_VAL(closure));
+      PUSH(OBJ_VAL(closure));
       for (uint32_t i = 0; i < closure->upvalues_len; i += 1) {
         uint8_t is_local = READ_BYTE();
-        uint32_t index = READ_IDX(READ_BYTE());
+        uint8_t index = READ_BYTE();
         if (is_local) {
           closure->upvalues[i] = capture_upvalue(frame->frame_ptr + index);
         } else {
           closure->upvalues[i] = frame->closure->upvalues[index];
         }
       }
-      break;
+      DISPATCH();
     }
-    case OpCloseUpvalue: {
+    CASE(OpCloseUpvalue) {
       close_upvalues(vm.stack_ptr - 1);
       pop_stack();
-      break;
+      DISPATCH();
     }
-    case OpClass: {
-      push_stack(OBJ_VAL(new_class(READ_STRING())));
-      break;
+    CASE(OpClass) {
+      PUSH(OBJ_VAL(new_class(READ_STRING())));
+      DISPATCH();
     }
-    case OpRet: {
+    CASE(OpRet) {
       Value result = pop_stack();
       close_upvalues(frame->frame_ptr);
       vm.frames_len -= 1;
@@ -549,23 +648,40 @@ static InterpretResult run() {
         return InterpretOk;
       }
       vm.stack_ptr = frame->frame_ptr;
-      push_stack(result);
-      frame = &vm.frames[vm.frames_len - 1];
-      break;
+      PUSH(result);
+      LOAD_FRAME();
+      DISPATCH();
     }
-    default: {
-      runtime_error("Unknown opcode %d.", inst);
-      return InterpretRuntimeErr;
+    UNKNOWN_CASE {
+      RUNTIME_ERROR("Unknown opcode %d.", inst);
     }
+
+#if !BREEZE_COMPUTED_GOTO
     }
   }
+#endif
+
+#undef LOAD_FRAME
+#undef SAVE_IP
+#undef CODE
 #undef READ_BYTE
 #undef READ_WORD
-#undef READ_CONSTANT
 #undef READ_IDX
+#undef READ_VALUE
+#undef READ_CONSTANT
 #undef READ_STRING
+#undef RUNTIME_ERROR
 #undef BINARY_OP
+#undef PUSH
+#undef CASE
+#undef DISPATCH
+#undef UNKNOWN_CASE
 }
+
+#if BREEZE_COMPUTED_GOTO
+#pragma GCC diagnostic pop
+#endif
+#undef TRACE
 
 InterpretResult interpret(const char *source) {
   ObjFunction *function = compile(source);

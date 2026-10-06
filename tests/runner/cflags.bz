@@ -1,0 +1,6 @@
+// cflags: -DDEBUG_PRINT_CODE
+// Self-test: per-test compiler flags. The disassembler only prints when
+// DEBUG_PRINT_CODE is defined, so its header proves the flag reached the build.
+print 1;
+// expect contains: == code ==
+// expect contains: OpPrint

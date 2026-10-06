@@ -1,0 +1,19 @@
+// Instance field reads and writes (hash-table lookups per access).
+class Point {
+  let x;
+  let y;
+}
+
+fn run(n) {
+  let p = Point();
+  p.x = 0;
+  p.y = 0;
+  let i = 0;
+  while (i < n) {
+    p.x = p.x + 1;
+    p.y = p.y + p.x;
+    i = i + 1;
+  }
+  return p.y;
+}
+print run(10000000);

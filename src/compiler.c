@@ -67,6 +67,9 @@ typedef struct Compiler {
   uint32_t locals_len;
   Upvalue upvalues[UINT8_COUNT];
   int32_t scope_depth;
+  // Offset of the most recent OpSetLocal/OpSetUpvalue, or -1. An expression
+  // statement that ends with it can fuse the set and its OpPop.
+  int32_t last_set_offset;
 } Compiler;
 
 Parser parser;
@@ -236,6 +239,24 @@ static void patch_jmp(uint32_t offset) {
   check_jmp_target(jmp);
   current_chunk()->code[offset] = jmp & 0xff;
   current_chunk()->code[offset + 1] = (jmp >> 8) & 0xff;
+  // A jump now lands at the current end of the chunk. If a statement pop is
+  // emitted here, the jumping path needs it too, so it must not be fused.
+  current_compiler->last_set_offset = -1;
+}
+
+// Pops the value of an expression statement. If the expression ended with a
+// local/upvalue assignment, turn that set into its popping variant instead of
+// emitting a separate OpPop.
+static void emit_statement_pop() {
+  Chunk *chunk = current_chunk();
+  int32_t set_offset = current_compiler->last_set_offset;
+  current_compiler->last_set_offset = -1;
+  if (set_offset >= 0 && (uint32_t)set_offset + 2 == chunk->len) {
+    uint8_t *op = &chunk->code[set_offset];
+    *op = (*op == OpSetLocal) ? OpSetLocalPop : OpSetUpvaluePop;
+    return;
+  }
+  emit_byte(OpPop);
 }
 
 static void parse_precedence(Precedence precedence);
@@ -333,6 +354,7 @@ static int32_t resolve_upvalue(Compiler *compiler, const Token *name) {
 
 static void emit_variable_operation(const Token *name, bool can_assign) {
   uint8_t get_op, set_op;
+  bool is_global = false;
   int32_t arg = resolve_local(current_compiler, name);
   if (arg != -1) {
     get_op = OpGetLocal;
@@ -344,15 +366,27 @@ static void emit_variable_operation(const Token *name, bool can_assign) {
     arg = emit_name(name);
     get_op = OpGetGlobal;
     set_op = OpSetGlobal;
+    is_global = true;
   }
 
   if (can_assign && match_token(TokenEqual)) {
     expression();
+    if (!is_global) {
+      current_compiler->last_set_offset = (int32_t)current_chunk()->len;
+    }
     emit_byte(set_op);
   } else {
     emit_byte(get_op);
   }
-  emit_idx(arg);
+
+  if (is_global) {
+    // Globals index the constant table, which can exceed 255 entries.
+    emit_idx(arg);
+  } else {
+    // Local slots and upvalue indices are capped at UINT8_COUNT, so a raw
+    // byte always fits and saves the width prefix and its branch.
+    emit_byte((uint8_t)arg);
+  }
 }
 
 static void add_local(const Token *name) {
@@ -463,6 +497,7 @@ static void init_compiler(Compiler *compiler,
 
   compiler->locals_len = 0;
   compiler->scope_depth = 0;
+  compiler->last_set_offset = -1;
 
   compiler->function = new_function();
 
@@ -534,7 +569,7 @@ static void function(const FunctionType function_type) {
 
   for (uint32_t i = 0; i < func->upvalues_len; i += 1) {
     emit_byte(compiler.upvalues[i].is_local ? 1 : 0);
-    emit_idx(compiler.upvalues[i].index);
+    emit_byte((uint8_t)compiler.upvalues[i].index);
   }
 }
 
@@ -819,36 +854,33 @@ static void return_statement() {
 static void if_statement() {
   expression();
 
-  uint32_t then_jmp = emit_jmp(OpJmpIfFalse);
-  emit_byte(OpPop);
+  // OpJmpIfFalsePop consumes the condition on both paths, so neither branch
+  // needs its own OpPop, and an `if` without `else` needs no OpJmp.
+  uint32_t then_jmp = emit_jmp(OpJmpIfFalsePop);
   consume_token(TokenLeftBrace, "Expect '{' after 'if' statement.");
   scoped_block();
 
-  uint32_t else_jmp = emit_jmp(OpJmp);
-
-  patch_jmp(then_jmp);
-  emit_byte(OpPop);
-
   if (match_token(TokenElse)) {
+    uint32_t else_jmp = emit_jmp(OpJmp);
+    patch_jmp(then_jmp);
     consume_token(TokenLeftBrace, "Expect '{' after 'else' statement.");
     scoped_block();
+    patch_jmp(else_jmp);
+  } else {
+    patch_jmp(then_jmp);
   }
-
-  patch_jmp(else_jmp);
 }
 
 static void while_statement() {
   uint32_t loop_start = current_chunk()->len;
   expression();
 
-  uint32_t exit_jmp = emit_jmp(OpJmpIfFalse);
-  emit_byte(OpPop);
+  uint32_t exit_jmp = emit_jmp(OpJmpIfFalsePop);
   consume_token(TokenLeftBrace, "Expect '{' after 'while' statement.");
   scoped_block();
   emit_loop(loop_start);
 
   patch_jmp(exit_jmp);
-  emit_byte(OpPop);
 }
 
 static void for_statement() {
@@ -867,15 +899,14 @@ static void for_statement() {
     expression();
     consume_token(TokenSemiColon, "Expect ';' after loop condition.");
 
-    exit_jmp = emit_jmp(OpJmpIfFalse);
-    emit_byte(OpPop);
+    exit_jmp = emit_jmp(OpJmpIfFalsePop);
   }
 
   if (!match_token(TokenRightParen)) {
     uint32_t body_jmp = emit_jmp(OpJmp);
     uint32_t increment_start = current_chunk()->len;
     expression();
-    emit_byte(OpPop);
+    emit_statement_pop();
     consume_token(TokenRightParen, "Expect ')' after 'for' clauses.");
 
     emit_loop(loop_start);
@@ -891,7 +922,6 @@ static void for_statement() {
 
   if (exit_jmp != -1) {
     patch_jmp(exit_jmp);
-    emit_byte(OpPop);
   }
 
   end_scope();
@@ -900,7 +930,7 @@ static void for_statement() {
 static void expression_statement() {
   expression();
   consume_token(TokenSemiColon, "Expect ';' after value.");
-  emit_byte(OpPop);
+  emit_statement_pop();
 }
 
 static void statement() {

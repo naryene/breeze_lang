@@ -1,0 +1,5 @@
+let n = 0;
+while (n + 1) {   // expect runtime error: Operand must be a boolean.
+  n = n + 1;
+}
+// expect runtime error: [line 2] in script

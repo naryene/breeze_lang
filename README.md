@@ -26,6 +26,16 @@ cd breeze_lang
 
 ### Build
 
+With Make (fastest build; outputs go to `build/release/` and `build/debug/`):
+
+```sh
+make                    # optimized interpreter: build/release/breeze
+make run FILE=test.txt  # build and run a script
+make debug              # build with AddressSanitizer + UBSan: build/debug/breeze
+make test               # run the regression suite
+make help               # list all targets
+```
+
 To build the project using CMake, follow these steps:
 
 1. Create a build directory:

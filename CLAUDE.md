@@ -9,6 +9,11 @@ Breeze is a dynamically typed scripting language implemented in C (C23) as a sin
 ## Build & run
 
 ```sh
+make                         # optimized build -> build/release/breeze (same flags as the benchmarks)
+make debug                   # ASan + UBSan build -> build/debug/breeze
+make run FILE=script.bz      # run a script with the release build
+make test / make check       # tests/run.sh / tests/check-all.sh
+make bench / make ab REV=x   # bench/run.py / bench/ab.py x against the working tree
 bash run.sh                  # cmake configure+build into build/, then runs build/breeze test.txt
 build/breeze <file>          # run a script
 build/breeze                 # REPL (each line is compiled independently)
@@ -18,8 +23,16 @@ bash debug.sh                # gdb --args build/breeze test.txt
 - Default build type is `Debug`, which enables ASan + UBSan.
 - Without cmake: `gcc -std=c2x -Wall -Wextra -g -fsanitize=address,undefined -Isrc src/*.c -o breeze`
 - Exit codes: 64 usage, 65 compile error, 70 runtime error, 74 file I/O.
-- Tests: `tests/run.sh` builds `build/breeze-test` with gcc + ASan/UBSan and runs every `tests/**/*.bz`; `tests/run.sh <substring>` runs a subset. Expectations live in comments: `// expect: <stdout line>`, `// expect runtime error: <text>` (exit 70), `// expect compile error: <text>` (exit 65), and a `// repl` line feeds the file to the REPL via stdin. Any sanitizer report fails the test. A `// stress-gc` line runs that test on a `DEBUG_STRESS_GC` build (GC on every allocation); `CFLAGS_EXTRA=-DDEBUG_STRESS_GC tests/run.sh` runs the whole suite that way.
+- Tests: `tests/check-all.sh` is the gate for every change. It checks warnings with `-Werror` and runs the suite under ASan/UBSan, under `DEBUG_STRESS_GC`, and against an `-O2` build. `tests/run.sh [substring]` runs the suite (or a subset) once. Expectations live in comments: `// expect: <stdout line>`, `// expect contains: <text>` / `// expect not contains: <text>` (substring checks, which disable line-by-line comparison), `// expect runtime error: <text>` (exit 70), `// expect compile error: <text>` (exit 65), `// repl` (feed the file to the REPL), `// cflags: <flags>` (run on a sanitizer build with extra flags, e.g. `-DDEBUG_PRINT_CODE`), and `// stress-gc` (shorthand for `-DDEBUG_STRESS_GC`). Any sanitizer report fails the test.
 - Debug toggles are `#define`s in `src/common.h`: `DEBUG_PRINT_CODE` (disassemble after compile), `DEBUG_TRACE_EXECUTION` (stack + instruction trace), `DEBUG_STRESS_GC` (collect on every allocation), `DEBUG_LOG_GC`.
+
+## Benchmarks
+
+- `python3 bench/run.py` times `bench/<name>.{bz,ts,lua,py,rs}` on every installed runtime (Breeze -O2, Lua, LuaJIT, Python, Node/Bun/Deno running TypeScript, Rust -O3), checks each program's output, and prints medians.
+- `--langs breeze --save build/bench/x.json` records a run, and `--compare build/bench/x.json` prints per-benchmark speedups plus the geometric mean. Use these around every performance change.
+- `bench/ab.py <rev-a> [<rev-b>]` builds two revisions (default B: the working tree) and alternates their runs, so both see the same machine state; use it to gate performance changes. Both tools link `virtual_machine.c` first and build with `-falign-jumps=32 -falign-labels=32 -falign-loops=32`, because code-layout shifts alone move timings by ~10%; with both, A/A runs agree within ±0.2%. `--cflags` adds flags to both sides.
+- Benchmark programs may only use features Breeze has: no arrays, no `%`, no number→string conversion.
+- Performance roadmap: `docs/superpowers/specs/2026-10-06-breeze-performance-roadmap.md`.
 
 ## Pipeline
 
@@ -27,9 +40,12 @@ bash debug.sh                # gdb --args build/breeze test.txt
 
 There is no AST: the Pratt parser (`rules[]` table in compiler.c) emits bytecode directly into `current_compiler->function->chunk`. Nested functions push a new `Compiler` linked via `enclosing`.
 
+- `run()` dispatches with computed goto (`dispatch_table`, `CASE()`/`DISPATCH()` macros) on GCC/Clang. `-DBREEZE_SWITCH_DISPATCH` selects a portable `switch`, and `tests/check-all.sh` tests both. A new opcode needs a `CASE()` handler, a `dispatch_table` entry (a missing one shows up as `-Wunused-label` or a compile error), compiler emission, and a `debug.c` case.
+- The instruction pointer is cached in the local `ip` inside `run()`. `frame->inst_ptr` is only current after `SAVE_IP()`, which must happen before `call_value()` and on every error path (use `RUNTIME_ERROR(...)`).
+
 ## Bytecode encoding (non-obvious)
 
-- **Variable-width operands reuse `OpConst`/`OpConstLong` as a width prefix.** Any operand that is an index (constant, global name, local slot, upvalue slot, property name, class/method name, closure upvalue index) is written via `emit_idx` → `write_constant_chunk`, producing either `OpConst <u8>` or `OpConstLong <u24 little-endian>`. So `OpGetLocal 3` is actually encoded as `OpGetLocal OpConst 3`. The VM decodes with `READ_IDX(READ_BYTE())` / `READ_STRING()`; the disassembler uses `special_inst` / `read_idx`. Any new opcode with an index operand must follow this convention in all three places (compiler, VM, debug.c).
+- **Index operands use `OpConst`/`OpConstLong` as a width prefix, except locals and upvalues.** Constant, global-name, property, class/method-name and closure-function operands are written via `emit_idx` → `write_constant_chunk` as `OpConst <u8>` or `OpConstLong <u24 little-endian>`, and the VM decodes them with `READ_IDX(READ_BYTE())` / `READ_STRING()`. Local slots and upvalue indices (≤ 255) are a single raw byte: `OpGetLocal <u8>`, and `OpClosure`'s upvalue pairs are `<u8 is_local> <u8 index>`. Any new opcode must use the same operand form in all three places: compiler, VM and `debug.c`.
 - **Jumps are absolute** 16-bit little-endian targets into the chunk (`READ_WORD`), not relative offsets. `patch_jmp` writes the current chunk length; `emit_loop` writes `loop_start`.
 - Line info is a run-length `LineVec` of `{line, last_offset}` pairs, queried by binary search in `get_line`.
 

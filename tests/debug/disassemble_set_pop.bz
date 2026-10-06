@@ -1,0 +1,11 @@
+// cflags: -DDEBUG_PRINT_CODE
+fn count(n) {
+  let i = 0;
+  while (i < n) {
+    i = i + 1;
+  }
+  return i;
+}
+print count(3);
+// expect contains: OpSetLocalPop
+// expect not contains: OpPop

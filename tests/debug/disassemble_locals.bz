@@ -1,0 +1,10 @@
+// cflags: -DDEBUG_PRINT_CODE
+// Local and upvalue operands are slot numbers, not constant-table indices.
+// This function has no constants at all, so indexing them used to crash.
+fn f(a, b) {
+  let c = a + b;
+  return c;
+}
+print f(1, 2);
+// expect contains: OpGetLocal          1
+// expect contains: OpGetLocal          3
