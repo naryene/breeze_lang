@@ -1,0 +1,5 @@
+// Self-test: substring expectations on stdout.
+print "hello world";
+print "abc";
+// expect contains: lo wo
+// expect not contains: xyz
