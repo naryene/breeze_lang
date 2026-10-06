@@ -37,6 +37,7 @@ typedef enum {
   OpSetLocal,
   OpGetLocal,
   OpJmpIfFalse,
+  OpJmpIfFalsePop,
   OpJmp,
   OpClosure,
   OpCall,

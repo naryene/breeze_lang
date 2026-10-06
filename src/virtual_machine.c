@@ -466,6 +466,17 @@ static InterpretResult run() {
       }
       break;
     }
+    case OpJmpIfFalsePop: {
+      uint16_t target = READ_WORD();
+      Value condition = pop_stack();
+      if (!IS_BOOL(condition)) {
+        RUNTIME_ERROR("Operand must be a boolean.");
+      }
+      if (!AS_BOOL(condition)) {
+        ip = CODE() + target;
+      }
+      break;
+    }
     case OpJmp: {
       // Read into a temporary: `ip = CODE() + READ_WORD()` would modify ip
       // twice without a sequence point.

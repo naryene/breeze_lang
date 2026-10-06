@@ -829,36 +829,33 @@ static void return_statement() {
 static void if_statement() {
   expression();
 
-  uint32_t then_jmp = emit_jmp(OpJmpIfFalse);
-  emit_byte(OpPop);
+  // OpJmpIfFalsePop consumes the condition on both paths, so neither branch
+  // needs its own OpPop, and an `if` without `else` needs no OpJmp.
+  uint32_t then_jmp = emit_jmp(OpJmpIfFalsePop);
   consume_token(TokenLeftBrace, "Expect '{' after 'if' statement.");
   scoped_block();
 
-  uint32_t else_jmp = emit_jmp(OpJmp);
-
-  patch_jmp(then_jmp);
-  emit_byte(OpPop);
-
   if (match_token(TokenElse)) {
+    uint32_t else_jmp = emit_jmp(OpJmp);
+    patch_jmp(then_jmp);
     consume_token(TokenLeftBrace, "Expect '{' after 'else' statement.");
     scoped_block();
+    patch_jmp(else_jmp);
+  } else {
+    patch_jmp(then_jmp);
   }
-
-  patch_jmp(else_jmp);
 }
 
 static void while_statement() {
   uint32_t loop_start = current_chunk()->len;
   expression();
 
-  uint32_t exit_jmp = emit_jmp(OpJmpIfFalse);
-  emit_byte(OpPop);
+  uint32_t exit_jmp = emit_jmp(OpJmpIfFalsePop);
   consume_token(TokenLeftBrace, "Expect '{' after 'while' statement.");
   scoped_block();
   emit_loop(loop_start);
 
   patch_jmp(exit_jmp);
-  emit_byte(OpPop);
 }
 
 static void for_statement() {
@@ -877,8 +874,7 @@ static void for_statement() {
     expression();
     consume_token(TokenSemiColon, "Expect ';' after loop condition.");
 
-    exit_jmp = emit_jmp(OpJmpIfFalse);
-    emit_byte(OpPop);
+    exit_jmp = emit_jmp(OpJmpIfFalsePop);
   }
 
   if (!match_token(TokenRightParen)) {
@@ -901,7 +897,6 @@ static void for_statement() {
 
   if (exit_jmp != -1) {
     patch_jmp(exit_jmp);
-    emit_byte(OpPop);
   }
 
   end_scope();

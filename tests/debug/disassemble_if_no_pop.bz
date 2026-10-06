@@ -1,0 +1,11 @@
+// cflags: -DDEBUG_PRINT_CODE
+// Conditions of if/while/for are consumed by OpJmpIfFalsePop, so this
+// program (no expression statements, no block locals) has no OpPop at all.
+fn f(b) {
+  if (b) { return 1; }
+  return 2;
+}
+print f(true);
+print f(false);
+// expect contains: OpJmpIfFalsePop
+// expect not contains: OpPop

@@ -116,6 +116,8 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
     return jmp_inst("OpJmp", chunk, offset);
   case OpJmpIfFalse:
     return jmp_inst("OpJmpIfFalse", chunk, offset);
+  case OpJmpIfFalsePop:
+    return jmp_inst("OpJmpIfFalsePop", chunk, offset);
   case OpConst:
     return constant_inst("OpConst", chunk, offset, NULL);
   case OpConstLong:
