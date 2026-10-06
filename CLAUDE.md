@@ -9,6 +9,11 @@ Breeze is a dynamically typed scripting language implemented in C (C23) as a sin
 ## Build & run
 
 ```sh
+make                         # optimized build -> build/release/breeze (same flags as the benchmarks)
+make debug                   # ASan + UBSan build -> build/debug/breeze
+make run FILE=script.bz      # run a script with the release build
+make test / make check       # tests/run.sh / tests/check-all.sh
+make bench / make ab REV=x   # bench/run.py / bench/ab.py x against the working tree
 bash run.sh                  # cmake configure+build into build/, then runs build/breeze test.txt
 build/breeze <file>          # run a script
 build/breeze                 # REPL (each line is compiled independently)
