@@ -35,6 +35,9 @@ bash debug.sh                # gdb --args build/breeze test.txt
 
 There is no AST: the Pratt parser (`rules[]` table in compiler.c) emits bytecode directly into `current_compiler->function->chunk`. Nested functions push a new `Compiler` linked via `enclosing`.
 
+- `run()` dispatches with computed goto (`dispatch_table`, `CASE()`/`DISPATCH()` macros) on GCC/Clang. `-DBREEZE_SWITCH_DISPATCH` selects a portable `switch`, and `tests/check-all.sh` tests both. A new opcode needs a `CASE()` handler, a `dispatch_table` entry (a missing one shows up as `-Wunused-label` or a compile error), compiler emission, and a `debug.c` case.
+- The instruction pointer is cached in the local `ip` inside `run()`. `frame->inst_ptr` is only current after `SAVE_IP()`, which must happen before `call_value()` and on every error path (use `RUNTIME_ERROR(...)`).
+
 ## Bytecode encoding (non-obvious)
 
 - **Index operands use `OpConst`/`OpConstLong` as a width prefix, except locals and upvalues.** Constant, global-name, property, class/method-name and closure-function operands are written via `emit_idx` → `write_constant_chunk` as `OpConst <u8>` or `OpConstLong <u24 little-endian>`, and the VM decodes them with `READ_IDX(READ_BYTE())` / `READ_STRING()`. Local slots and upvalue indices (≤ 255) are a single raw byte: `OpGetLocal <u8>`, and `OpClosure`'s upvalue pairs are `<u8 is_local> <u8 index>`. Any new opcode must use the same operand form in all three places: compiler, VM and `debug.c`.
