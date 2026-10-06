@@ -19,4 +19,9 @@ echo "== -O2 without sanitizers"
 gcc -std=c2x -O2 -I"$root/src" "$root"/src/*.c -o "$root/build/breeze-o2"
 BREEZE="$root/build/breeze-o2" "$root/tests/run.sh"
 
+echo "== switch dispatch (portable fallback)"
+gcc -std=c2x -Wall -Wextra -pedantic -Werror -fsyntax-only \
+  -DBREEZE_SWITCH_DISPATCH -I"$root/src" "$root"/src/*.c
+CFLAGS_EXTRA=-DBREEZE_SWITCH_DISPATCH "$root/tests/run.sh"
+
 echo "== all checks passed"

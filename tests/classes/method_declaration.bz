@@ -1,0 +1,9 @@
+class Greeter {
+  let name;
+  fn greet() { return 1; }
+  fn wave(times) { return times; }
+}
+let g = Greeter();
+g.name = "x";
+print Greeter;   // expect: <class Greeter>
+print g.name;    // expect: x
