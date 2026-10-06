@@ -53,7 +53,9 @@ def build_breeze():
     sources = [str(f) for f in files if f.name == "virtual_machine.c"]
     sources += [str(f) for f in files if f.name != "virtual_machine.c"]
     subprocess.run(
-        ["gcc", "-std=c2x", "-O2", "-DNDEBUG", f"-I{ROOT / 'src'}", *sources,
+        # Fixed branch-target alignment: see ALIGN in bench/ab.py.
+        ["gcc", "-std=c2x", "-O2", "-DNDEBUG", "-falign-jumps=32",
+         "-falign-labels=32", "-falign-loops=32", f"-I{ROOT / 'src'}", *sources,
          "-o", str(out)],
         check=True,
     )
