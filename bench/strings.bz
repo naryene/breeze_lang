@@ -1,0 +1,15 @@
+// String concatenation + equality: allocation, hashing, interning, GC.
+// The parts live in variables so no language can fold the concat at compile time.
+fn run(n) {
+  let a = "hello ";
+  let b = "world";
+  let matches = 0;
+  let i = 0;
+  while (i < n) {
+    let s = a + b;
+    if (s == "hello world") { matches = matches + 1; }
+    i = i + 1;
+  }
+  return matches;
+}
+print run(8000000);

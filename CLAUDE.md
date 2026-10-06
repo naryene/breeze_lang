@@ -21,6 +21,13 @@ bash debug.sh                # gdb --args build/breeze test.txt
 - Tests: `tests/run.sh` builds `build/breeze-test` with gcc + ASan/UBSan and runs every `tests/**/*.bz`; `tests/run.sh <substring>` runs a subset. Expectations live in comments: `// expect: <stdout line>`, `// expect runtime error: <text>` (exit 70), `// expect compile error: <text>` (exit 65), and a `// repl` line feeds the file to the REPL via stdin. Any sanitizer report fails the test. A `// stress-gc` line runs that test on a `DEBUG_STRESS_GC` build (GC on every allocation); `CFLAGS_EXTRA=-DDEBUG_STRESS_GC tests/run.sh` runs the whole suite that way.
 - Debug toggles are `#define`s in `src/common.h`: `DEBUG_PRINT_CODE` (disassemble after compile), `DEBUG_TRACE_EXECUTION` (stack + instruction trace), `DEBUG_STRESS_GC` (collect on every allocation), `DEBUG_LOG_GC`.
 
+## Benchmarks
+
+- `python3 bench/run.py` times `bench/<name>.{bz,ts,lua,py,rs}` on every installed runtime (Breeze -O2, Lua, LuaJIT, Python, Node/Bun/Deno running TypeScript, Rust -O3), checks each program's output, and prints medians.
+- `--langs breeze --save build/bench/x.json` records a run, and `--compare build/bench/x.json` prints per-benchmark speedups plus the geometric mean. Use these around every performance change.
+- Benchmark programs may only use features Breeze has: no arrays, no `%`, no number→string conversion.
+- Performance roadmap: `docs/superpowers/specs/2026-10-06-breeze-performance-roadmap.md`.
+
 ## Pipeline
 
 `main.c` → `interpret()` (virtual_machine.c) → `compile()` (compiler.c pulls tokens on demand from scanner.c) → returns top-level `ObjFunction` → wrapped in `ObjClosure`, called as frame 0 → `run()` dispatch loop.

@@ -1,0 +1,11 @@
+// Tight arithmetic loop over locals: dispatch + local get/set.
+fn run(n) {
+  let sum = 0;
+  let i = 0;
+  while (i < n) {
+    sum = sum + i;
+    i = i + 1;
+  }
+  return sum;
+}
+print run(20000000);
