@@ -117,10 +117,13 @@ Per-task speedups (aligned A/B, previous commit → task commit):
 | 7 | fused assignment statements | 1.00× | 1.24× | 0.99× | 1.04× | 1.01× | 1.05× |
 | 8 | computed-goto dispatch | 1.10× | 1.01× | 0.98× | 1.02× | 1.04× | 1.03× |
 | | **Phase 1 code changes (main `1c22443` → Task 8, same build)** | **1.55×** | **1.12×** | **1.43×** | **1.30×** | **1.24×** | **1.32×** |
-| | **User-visible (original `-O2` baseline → aligned release build)** | **1.58×** | **1.51×** | **1.52×** | **1.49×** | **1.51×** | **1.52×** |
+| | **`bench/run.py` build (original plain `-O2` baseline → `-O2` + pinned link order + aligned branch targets)** | **1.58×** | **1.51×** | **1.52×** | **1.49×** | **1.51×** | **1.52×** |
 
-The user-visible row also includes the switch to aligned branch targets in the
-release build. Its geomean leaves out the sub-millisecond `startup` row.
+The `bench/run.py` row also includes the build-flag change (link order and
+branch-target alignment). That build exists only in the benchmark tooling: the
+CMake build (Debug with sanitizers by default) does not use those flags yet, so
+the 1.32× code-change row is what a plain `-O2` build gains. The geomean leaves
+out the sub-millisecond `startup` row.
 
 Notes:
 - Task 6's `loop` loss came from adding the handler, not from the new bytecode. With
@@ -131,8 +134,9 @@ Notes:
   handles the shared `switch` branch well.
 - Instructions per `loop` iteration: 16 (36 bytes) before → 13 (25 bytes) after.
 
-**Target check.** The code-change goal of ≥ 1.4× was missed (1.32×). The user-visible
-release build is 1.52× faster. "Faster than CPython on every benchmark" was met.
+**Target check.** The code-change goal of ≥ 1.4× was missed (1.32×). The `bench/run.py`
+build is 1.52× faster; a CMake Release configuration carrying its flags is a
+follow-up. "Faster than CPython on every benchmark" was met.
 
 Cross-language, after Phase 1 (`bench/run.py --runs 5`, median; ratio = time ÷ Breeze):
 

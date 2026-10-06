@@ -234,6 +234,14 @@ static void concat() {
   push_stack(OBJ_VAL(result));
 }
 
+// Branch hint for error paths in the dispatch loop: keeps them out of the
+// hot instruction stream.
+#if defined(__GNUC__)
+#define UNLIKELY(condition) __builtin_expect(!!(condition), 0)
+#else
+#define UNLIKELY(condition) (condition)
+#endif
+
 #if defined(__GNUC__) && !defined(BREEZE_SWITCH_DISPATCH)
 #define BREEZE_COMPUTED_GOTO 1
 #else
@@ -304,6 +312,20 @@ static InterpretResult run() {
     return InterpretRuntimeErr;                                                \
   } while (false)
 
+// Pushes inside run() check for overflow here rather than in push_stack(),
+// so the error goes through RUNTIME_ERROR and the trace sees the current ip.
+// The value goes into a temporary first: it may itself pop (e.g. OpNeg), and
+// `*vm.stack_ptr = pop_stack()` would read and write stack_ptr unsequenced.
+#define PUSH(value)                                                            \
+  do {                                                                         \
+    Value pushed = (value);                                                    \
+    if (UNLIKELY(vm.stack_ptr >= vm.stack + STACK_MAX)) {                      \
+      RUNTIME_ERROR("Stack overflow.");                                        \
+    }                                                                          \
+    *vm.stack_ptr = pushed;                                                    \
+    vm.stack_ptr += 1;                                                         \
+  } while (false)
+
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
     if (!IS_NUMBER(peek_stack(0)) || !IS_NUMBER(peek_stack(1))) {              \
@@ -311,7 +333,7 @@ static InterpretResult run() {
     }                                                                          \
     double right = AS_NUMBER(pop_stack());                                     \
     double left = AS_NUMBER(pop_stack());                                      \
-    push_stack(value_type(left op right));                                     \
+    PUSH(value_type(left op right));                                     \
   } while (false)
 
 #if BREEZE_COMPUTED_GOTO
@@ -385,19 +407,19 @@ static InterpretResult run() {
 
     CASE(OpConst)
     CASE(OpConstLong) {
-      push_stack(READ_CONSTANT(inst));
+      PUSH(READ_CONSTANT(inst));
       DISPATCH();
     }
     CASE(OpNull) {
-      push_stack(NULL_VAL);
+      PUSH(NULL_VAL);
       DISPATCH();
     }
     CASE(OpTrue) {
-      push_stack(BOOL_VAL(true));
+      PUSH(BOOL_VAL(true));
       DISPATCH();
     }
     CASE(OpFalse) {
-      push_stack(BOOL_VAL(false));
+      PUSH(BOOL_VAL(false));
       DISPATCH();
     }
     CASE(OpDefineGlobal) {
@@ -420,7 +442,7 @@ static InterpretResult run() {
       if (!table_get(&vm.globals, name, &value)) {
         RUNTIME_ERROR("Undefined variable '%s'.", name->chars);
       }
-      push_stack(value);
+      PUSH(value);
       DISPATCH();
     }
     CASE(OpSetLocal) {
@@ -435,7 +457,7 @@ static InterpretResult run() {
     }
     CASE(OpGetLocal) {
       uint8_t slot = READ_BYTE();
-      push_stack(frame->frame_ptr[slot]);
+      PUSH(frame->frame_ptr[slot]);
       DISPATCH();
     }
     CASE(OpSetUpvalue) {
@@ -450,7 +472,7 @@ static InterpretResult run() {
     }
     CASE(OpGetUpvalue) {
       uint8_t slot = READ_BYTE();
-      push_stack(*frame->closure->upvalues[slot]->location);
+      PUSH(*frame->closure->upvalues[slot]->location);
       DISPATCH();
     }
     CASE(OpDefineProperty) {
@@ -474,7 +496,7 @@ static InterpretResult run() {
       table_insert(&instance->fields, name, peek_stack(0));
       Value value = pop_stack();
       pop_stack();
-      push_stack(value);
+      PUSH(value);
       DISPATCH();
     }
     CASE(OpGetProperty) {
@@ -488,13 +510,13 @@ static InterpretResult run() {
         RUNTIME_ERROR("Undefined property '%s'", name->chars);
       }
       pop_stack();
-      push_stack(value);
+      PUSH(value);
       DISPATCH();
     }
     CASE(OpEq) {
       Value right = pop_stack();
       Value left = pop_stack();
-      push_stack(BOOL_VAL(values_equal(left, right)));
+      PUSH(BOOL_VAL(values_equal(left, right)));
       DISPATCH();
     }
     CASE(OpLt) {
@@ -511,7 +533,7 @@ static InterpretResult run() {
       } else if (IS_NUMBER(peek_stack(0)) && IS_NUMBER(peek_stack(1))) {
         double right = AS_NUMBER(pop_stack());
         double left = AS_NUMBER(pop_stack());
-        push_stack(NUMBER_VAL(left + right));
+        PUSH(NUMBER_VAL(left + right));
       } else {
         RUNTIME_ERROR("Operands must be two numbers or two strings.");
       }
@@ -533,14 +555,14 @@ static InterpretResult run() {
       if (!IS_NUMBER(peek_stack(0))) {
         RUNTIME_ERROR("Operand must be a number.");
       }
-      push_stack(NUMBER_VAL(-AS_NUMBER(pop_stack())));
+      PUSH(NUMBER_VAL(-AS_NUMBER(pop_stack())));
       DISPATCH();
     }
     CASE(OpNot) {
       if (!IS_BOOL(peek_stack(0))) {
         RUNTIME_ERROR("Operand must be a boolean.");
       }
-      push_stack(BOOL_VAL(!AS_BOOL(pop_stack())));
+      PUSH(BOOL_VAL(!AS_BOOL(pop_stack())));
       DISPATCH();
     }
     CASE(OpPrint) {
@@ -596,7 +618,7 @@ static InterpretResult run() {
     CASE(OpClosure) {
       ObjFunction *function = AS_FUNCTION(READ_CONSTANT(READ_BYTE()));
       ObjClosure *closure = new_closure(function);
-      push_stack(OBJ_VAL(closure));
+      PUSH(OBJ_VAL(closure));
       for (uint32_t i = 0; i < closure->upvalues_len; i += 1) {
         uint8_t is_local = READ_BYTE();
         uint8_t index = READ_BYTE();
@@ -614,7 +636,7 @@ static InterpretResult run() {
       DISPATCH();
     }
     CASE(OpClass) {
-      push_stack(OBJ_VAL(new_class(READ_STRING())));
+      PUSH(OBJ_VAL(new_class(READ_STRING())));
       DISPATCH();
     }
     CASE(OpRet) {
@@ -626,7 +648,7 @@ static InterpretResult run() {
         return InterpretOk;
       }
       vm.stack_ptr = frame->frame_ptr;
-      push_stack(result);
+      PUSH(result);
       LOAD_FRAME();
       DISPATCH();
     }
@@ -650,6 +672,7 @@ static InterpretResult run() {
 #undef READ_STRING
 #undef RUNTIME_ERROR
 #undef BINARY_OP
+#undef PUSH
 #undef CASE
 #undef DISPATCH
 #undef UNKNOWN_CASE
