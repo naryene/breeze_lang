@@ -218,14 +218,6 @@ static void define_method(ObjString *name){
   pop_stack();
 }
 
-static InterpretResult check_bool(Value value) {
-  if (!IS_BOOL(value)) {
-    runtime_error("Operand must be a boolean.");
-    return InterpretRuntimeErr;
-  }
-  return InterpretOk;
-}
-
 static void concat() {
   ObjString *right = AS_STRING(peek_stack(0));
   ObjString *left = AS_STRING(peek_stack(1));
@@ -242,58 +234,55 @@ static void concat() {
   push_stack(OBJ_VAL(result));
 }
 
-static inline uint8_t read_byte(CallFrame *frame) {
-  frame->inst_ptr += 1;
-  return frame->inst_ptr[-1];
-}
-
-// Reads an index operand whose width is given by the prefix opcode that was
-// just read: OpConst -> 1 byte, OpConstLong -> 3 bytes (little-endian).
-static inline uint32_t read_idx(CallFrame *frame, uint8_t width_op) {
-  if (width_op == OpConst) {
-    return read_byte(frame);
-  }
-  uint32_t idx = read_byte(frame);
-  idx |= (uint32_t)read_byte(frame) << 8;
-  idx |= (uint32_t)read_byte(frame) << 16;
-  return idx;
-}
-
-static inline ObjString *read_string(CallFrame *frame) {
-  uint32_t idx = read_idx(frame, read_byte(frame));
-  return AS_STRING(frame->closure->function->chunk.constants.values[idx]);
-}
-
 static InterpretResult run() {
-  /*** MACROS DEFINITION ***/
-  CallFrame *frame = &vm.frames[vm.frames_len - 1];
+  CallFrame *frame;
+  uint8_t *ip;
 
-#define READ_BYTE() (frame->inst_ptr += 1, *(frame->inst_ptr - 1))
+// The instruction pointer lives in a local so gcc can keep it in a register.
+// frame->inst_ptr is only current after SAVE_IP(), so call SAVE_IP() before
+// anything that reads it: call_value() (the new frame's caller resumes from
+// it) and runtime_error() (the trace walks every frame) -- RUNTIME_ERROR()
+// does the latter for you.
+#define LOAD_FRAME()                                                           \
+  (frame = &vm.frames[vm.frames_len - 1], ip = frame->inst_ptr)
+#define SAVE_IP() (frame->inst_ptr = ip)
+#define CODE() (frame->closure->function->chunk.code)
+
+#define READ_BYTE() (ip += 1, ip[-1])
+#define READ_WORD() (ip += 2, (uint16_t)(ip[-2] | (ip[-1] << 8)))
+// Index operand whose width is selected by the prefix opcode just read:
+// OpConst -> 1 byte, OpConstLong -> 3 bytes little-endian. The long branch
+// advances ip first and then reads fixed offsets, so no read is unsequenced
+// with the increment.
+#define READ_IDX(width_op)                                                     \
+  ((width_op) == OpConst                                                       \
+       ? (ip += 1, (uint32_t)ip[-1])                                           \
+       : (ip += 3, (uint32_t)ip[-3] | ((uint32_t)ip[-2] << 8) |                \
+                       ((uint32_t)ip[-1] << 16)))
 #define READ_VALUE(idx) (frame->closure->function->chunk.constants.values[idx])
+#define READ_CONSTANT(width_op) READ_VALUE(READ_IDX(width_op))
+#define READ_STRING() AS_STRING(READ_CONSTANT(READ_BYTE()))
 
-#define READ_WORD()                                                            \
-  (frame->inst_ptr += 2,                                                       \
-   (uint16_t)(frame->inst_ptr[-2] | (frame->inst_ptr[-1] << 8)))
-
-#define READ_IDX(width_op) read_idx(frame, width_op)
-#define READ_CONSTANT(width_op) (READ_VALUE(READ_IDX(width_op)))
-#define READ_STRING() read_string(frame)
+#define RUNTIME_ERROR(...)                                                     \
+  do {                                                                         \
+    SAVE_IP();                                                                 \
+    runtime_error(__VA_ARGS__);                                                \
+    return InterpretRuntimeErr;                                                \
+  } while (false)
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
     if (!IS_NUMBER(peek_stack(0)) || !IS_NUMBER(peek_stack(1))) {              \
-      runtime_error("Operands must be numbers.");                              \
-      return InterpretRuntimeErr;                                              \
+      RUNTIME_ERROR("Operands must be numbers.");                              \
     }                                                                          \
     double right = AS_NUMBER(pop_stack());                                     \
     double left = AS_NUMBER(pop_stack());                                      \
     push_stack(value_type(left op right));                                     \
   } while (false)
 
-  /*** MACROS DEFINITION ***/
+  LOAD_FRAME();
 
   while (true) {
-
 #ifdef DEBUG_TRACE_EXECUTION
     printf("        ");
     for (Value *stack_slot = vm.stack; stack_slot < vm.stack_ptr;
@@ -303,16 +292,14 @@ static InterpretResult run() {
       printf(" ]");
     }
     printf("\n");
-    disassemble_inst(
-        &frame->closure->function->chunk,
-        (uint32_t)(frame->inst_ptr - frame->closure->function->chunk.code));
+    disassemble_inst(&frame->closure->function->chunk,
+                     (uint32_t)(ip - CODE()));
 #endif /* DEBUG_TRACE_EXECUTION */
     uint8_t inst;
     switch (inst = READ_BYTE()) {
     case OpConst:
     case OpConstLong: {
-      Value constant = READ_CONSTANT(inst);
-      push_stack(constant);
+      push_stack(READ_CONSTANT(inst));
       break;
     }
     case OpNull: {
@@ -337,8 +324,7 @@ static InterpretResult run() {
       ObjString *name = READ_STRING();
       if (table_insert(&vm.globals, name, peek_stack(0))) {
         table_remove(&vm.globals, name);
-        runtime_error("Undefined variable '%s'.", name->chars);
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Undefined variable '%s'.", name->chars);
       }
       break;
     }
@@ -346,8 +332,7 @@ static InterpretResult run() {
       ObjString *name = READ_STRING();
       Value value;
       if (!table_get(&vm.globals, name, &value)) {
-        runtime_error("Undefined variable '%s'.", name->chars);
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Undefined variable '%s'.", name->chars);
       }
       push_stack(value);
       break;
@@ -375,30 +360,21 @@ static InterpretResult run() {
     case OpDefineProperty: {
       ObjClass *klass = AS_CLASS(peek_stack(0));
       ObjString *name = READ_STRING();
-
       if (set_contains(&klass->fields, name)) {
-        runtime_error("Field %s is already defined.", name->chars);
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Field %s is already defined.", name->chars);
       }
       set_insert(&klass->fields, name);
-
-
       break;
     }
     case OpSetProperty: {
       if (!IS_INSTANCE(peek_stack(1))) {
-        runtime_error("Properties are defined for instances only.");
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Properties are defined for instances only.");
       }
-
       ObjInstance *instance = AS_INSTANCE(peek_stack(1));
       ObjString *name = READ_STRING();
-
       if (!set_contains(&instance->klass->fields, name)) {
-        runtime_error("Undefined property '%s'.", name->chars);
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Undefined property '%s'.", name->chars);
       }
-
       table_insert(&instance->fields, name, peek_stack(0));
       Value value = pop_stack();
       pop_stack();
@@ -407,21 +383,17 @@ static InterpretResult run() {
     }
     case OpGetProperty: {
       if (!IS_INSTANCE(peek_stack(0))) {
-        runtime_error("Properties are defined for instances only.");
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Properties are defined for instances only.");
       }
-
       ObjInstance *instance = AS_INSTANCE(peek_stack(0));
       ObjString *name = READ_STRING();
-
       Value value;
-      if (table_get(&instance->fields, name, &value)) {
-        pop_stack();
-        push_stack(value);
-        break;
+      if (!table_get(&instance->fields, name, &value)) {
+        RUNTIME_ERROR("Undefined property '%s'", name->chars);
       }
-      runtime_error("Undefined property '%s'", name->chars);
-      return InterpretRuntimeErr;
+      pop_stack();
+      push_stack(value);
+      break;
     }
     case OpEq: {
       Value right = pop_stack();
@@ -445,8 +417,7 @@ static InterpretResult run() {
         double left = AS_NUMBER(pop_stack());
         push_stack(NUMBER_VAL(left + right));
       } else {
-        runtime_error("Operands must be two numbers or two strings.");
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Operands must be two numbers or two strings.");
       }
       break;
     }
@@ -464,18 +435,15 @@ static InterpretResult run() {
     }
     case OpNeg: {
       if (!IS_NUMBER(peek_stack(0))) {
-        runtime_error("Operand must be a number.");
-        return InterpretRuntimeErr;
+        RUNTIME_ERROR("Operand must be a number.");
       }
       push_stack(NUMBER_VAL(-AS_NUMBER(pop_stack())));
       break;
     }
     case OpNot: {
-      InterpretResult check_result = check_bool(peek_stack(0));
-      if (check_result == InterpretRuntimeErr) {
-        return check_result;
+      if (!IS_BOOL(peek_stack(0))) {
+        RUNTIME_ERROR("Operand must be a boolean.");
       }
-
       push_stack(BOOL_VAL(!AS_BOOL(pop_stack())));
       break;
     }
@@ -489,33 +457,35 @@ static InterpretResult run() {
       break;
     }
     case OpJmpIfFalse: {
-      uint16_t offset = READ_WORD();
-      InterpretResult check_result = check_bool(peek_stack(0));
-      if (check_result == InterpretRuntimeErr) {
-        return check_result;
+      uint16_t target = READ_WORD();
+      if (!IS_BOOL(peek_stack(0))) {
+        RUNTIME_ERROR("Operand must be a boolean.");
       }
-      if (AS_BOOL(peek_stack(0)) == false) {
-        frame->inst_ptr = frame->closure->function->chunk.code + offset;
+      if (!AS_BOOL(peek_stack(0))) {
+        ip = CODE() + target;
       }
       break;
     }
     case OpJmp: {
-      uint16_t offset = READ_WORD();
-      frame->inst_ptr = frame->closure->function->chunk.code + offset;
+      // Read into a temporary: `ip = CODE() + READ_WORD()` would modify ip
+      // twice without a sequence point.
+      uint16_t target = READ_WORD();
+      ip = CODE() + target;
       break;
     }
     case OpCall: {
       uint8_t args_len = READ_BYTE();
+      SAVE_IP();
       if (!call_value(peek_stack(args_len), args_len)) {
         return InterpretRuntimeErr;
       }
-      frame = &vm.frames[vm.frames_len - 1];
+      LOAD_FRAME();
       break;
     }
-      case OpMethod: {
-        define_method(READ_STRING());
-        break;
-      }
+    case OpMethod: {
+      define_method(READ_STRING());
+      break;
+    }
     case OpClosure: {
       ObjFunction *function = AS_FUNCTION(READ_CONSTANT(READ_BYTE()));
       ObjClosure *closure = new_closure(function);
@@ -550,20 +520,24 @@ static InterpretResult run() {
       }
       vm.stack_ptr = frame->frame_ptr;
       push_stack(result);
-      frame = &vm.frames[vm.frames_len - 1];
+      LOAD_FRAME();
       break;
     }
     default: {
-      runtime_error("Unknown opcode %d.", inst);
-      return InterpretRuntimeErr;
+      RUNTIME_ERROR("Unknown opcode %d.", inst);
     }
     }
   }
+#undef LOAD_FRAME
+#undef SAVE_IP
+#undef CODE
 #undef READ_BYTE
 #undef READ_WORD
-#undef READ_CONSTANT
 #undef READ_IDX
+#undef READ_VALUE
+#undef READ_CONSTANT
 #undef READ_STRING
+#undef RUNTIME_ERROR
 #undef BINARY_OP
 }
 
