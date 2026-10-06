@@ -25,6 +25,7 @@ bash debug.sh                # gdb --args build/breeze test.txt
 
 - `python3 bench/run.py` times `bench/<name>.{bz,ts,lua,py,rs}` on every installed runtime (Breeze -O2, Lua, LuaJIT, Python, Node/Bun/Deno running TypeScript, Rust -O3), checks each program's output, and prints medians.
 - `--langs breeze --save build/bench/x.json` records a run, and `--compare build/bench/x.json` prints per-benchmark speedups plus the geometric mean. Use these around every performance change.
+- `bench/ab.py <rev-a> [<rev-b>]` builds two revisions (default B: the working tree) and alternates their runs, so both see the same machine state; use it to gate performance changes. Both tools link `virtual_machine.c` first, because code-layout shifts alone move timings by ~10%.
 - Benchmark programs may only use features Breeze has: no arrays, no `%`, no number→string conversion.
 - Performance roadmap: `docs/superpowers/specs/2026-10-06-breeze-performance-roadmap.md`.
 

@@ -47,7 +47,11 @@ def find(tool, *extra_paths):
 
 def build_breeze():
     out = BUILD / "breeze-release"
-    sources = sorted(str(p) for p in (ROOT / "src").glob("*.c"))
+    # virtual_machine.c first: otherwise any size change in a file linked
+    # before it moves the dispatch loop and shifts timings by ~10%.
+    files = sorted((ROOT / "src").glob("*.c"))
+    sources = [str(f) for f in files if f.name == "virtual_machine.c"]
+    sources += [str(f) for f in files if f.name != "virtual_machine.c"]
     subprocess.run(
         ["gcc", "-std=c2x", "-O2", "-DNDEBUG", f"-I{ROOT / 'src'}", *sources,
          "-o", str(out)],
