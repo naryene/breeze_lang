@@ -144,6 +144,10 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
     return byte_inst("OpSetUpvalue", chunk, offset);
   case OpGetLocal:
     return byte_inst("OpGetLocal", chunk, offset);
+  case OpSetUpvaluePop:
+    return byte_inst("OpSetUpvaluePop", chunk, offset);
+  case OpSetLocalPop:
+    return byte_inst("OpSetLocalPop", chunk, offset);
   case OpSetLocal:
     return byte_inst("OpSetLocal", chunk, offset);
   case OpDefineProperty:

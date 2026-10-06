@@ -67,6 +67,9 @@ typedef struct Compiler {
   uint32_t locals_len;
   Upvalue upvalues[UINT8_COUNT];
   int32_t scope_depth;
+  // Offset of the most recent OpSetLocal/OpSetUpvalue, or -1. An expression
+  // statement that ends with it can fuse the set and its OpPop.
+  int32_t last_set_offset;
 } Compiler;
 
 Parser parser;
@@ -236,6 +239,24 @@ static void patch_jmp(uint32_t offset) {
   check_jmp_target(jmp);
   current_chunk()->code[offset] = jmp & 0xff;
   current_chunk()->code[offset + 1] = (jmp >> 8) & 0xff;
+  // A jump now lands at the current end of the chunk. If a statement pop is
+  // emitted here, the jumping path needs it too, so it must not be fused.
+  current_compiler->last_set_offset = -1;
+}
+
+// Pops the value of an expression statement. If the expression ended with a
+// local/upvalue assignment, turn that set into its popping variant instead of
+// emitting a separate OpPop.
+static void emit_statement_pop() {
+  Chunk *chunk = current_chunk();
+  int32_t set_offset = current_compiler->last_set_offset;
+  current_compiler->last_set_offset = -1;
+  if (set_offset >= 0 && (uint32_t)set_offset + 2 == chunk->len) {
+    uint8_t *op = &chunk->code[set_offset];
+    *op = (*op == OpSetLocal) ? OpSetLocalPop : OpSetUpvaluePop;
+    return;
+  }
+  emit_byte(OpPop);
 }
 
 static void parse_precedence(Precedence precedence);
@@ -350,6 +371,9 @@ static void emit_variable_operation(const Token *name, bool can_assign) {
 
   if (can_assign && match_token(TokenEqual)) {
     expression();
+    if (!is_global) {
+      current_compiler->last_set_offset = (int32_t)current_chunk()->len;
+    }
     emit_byte(set_op);
   } else {
     emit_byte(get_op);
@@ -473,6 +497,7 @@ static void init_compiler(Compiler *compiler,
 
   compiler->locals_len = 0;
   compiler->scope_depth = 0;
+  compiler->last_set_offset = -1;
 
   compiler->function = new_function();
 
@@ -881,7 +906,7 @@ static void for_statement() {
     uint32_t body_jmp = emit_jmp(OpJmp);
     uint32_t increment_start = current_chunk()->len;
     expression();
-    emit_byte(OpPop);
+    emit_statement_pop();
     consume_token(TokenRightParen, "Expect ')' after 'for' clauses.");
 
     emit_loop(loop_start);
@@ -905,7 +930,7 @@ static void for_statement() {
 static void expression_statement() {
   expression();
   consume_token(TokenSemiColon, "Expect ';' after value.");
-  emit_byte(OpPop);
+  emit_statement_pop();
 }
 
 static void statement() {

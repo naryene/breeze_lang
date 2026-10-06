@@ -342,6 +342,11 @@ static InterpretResult run() {
       frame->frame_ptr[slot] = peek_stack(0);
       break;
     }
+    case OpSetLocalPop: {
+      uint8_t slot = READ_BYTE();
+      frame->frame_ptr[slot] = pop_stack();
+      break;
+    }
     case OpGetLocal: {
       uint8_t slot = READ_BYTE();
       push_stack(frame->frame_ptr[slot]);
@@ -350,6 +355,11 @@ static InterpretResult run() {
     case OpSetUpvalue: {
       uint8_t slot = READ_BYTE();
       *frame->closure->upvalues[slot]->location = peek_stack(0);
+      break;
+    }
+    case OpSetUpvaluePop: {
+      uint8_t slot = READ_BYTE();
+      *frame->closure->upvalues[slot]->location = pop_stack();
       break;
     }
     case OpGetUpvalue: {
