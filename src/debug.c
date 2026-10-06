@@ -68,6 +68,16 @@ static uint32_t special_inst(const char *name, const Chunk *chunk,
   return offset;
 }
 
+// Locals and upvalues are addressed by stack slot / upvalue index, not by
+// constant-table index, so print the number only.
+static uint32_t slot_inst(const char *name, const Chunk *chunk,
+                          uint32_t offset) {
+  uint32_t slot = 0;
+  offset = read_idx(chunk, offset + 1, &slot);
+  printf("%-16s %4d\n", name, slot);
+  return offset;
+}
+
 static uint32_t jmp_inst(const char *name, const Chunk *chunk,
                          uint32_t offset) {
   uint16_t jmp = (uint16_t)chunk->code[offset + 1];
@@ -136,13 +146,13 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   case OpSetGlobal:
     return special_inst("OpSetGlobal", chunk, offset, NULL);
   case OpGetUpvalue:
-    return special_inst("OpGetUpvalue", chunk, offset, NULL);
+    return slot_inst("OpGetUpvalue", chunk, offset);
   case OpSetUpvalue:
-    return special_inst("OpSetUpvalue", chunk, offset, NULL);
+    return slot_inst("OpSetUpvalue", chunk, offset);
   case OpGetLocal:
-    return special_inst("OpGetLocal", chunk, offset, NULL);
+    return slot_inst("OpGetLocal", chunk, offset);
   case OpSetLocal:
-    return special_inst("OpSetLocal", chunk, offset, NULL);
+    return slot_inst("OpSetLocal", chunk, offset);
   case OpDefineProperty:
     return special_inst("OpDefineProperty", chunk, offset, NULL);
   case OpGetProperty:
