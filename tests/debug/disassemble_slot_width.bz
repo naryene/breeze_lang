@@ -1,0 +1,8 @@
+// cflags: -DDEBUG_PRINT_CODE
+// OpGetLocal takes a single raw byte, so the OpRet after it starts at
+// offset 2 (it was offset 3 with the OpConst width prefix).
+fn f(a) {
+  return a;
+}
+print f(7);
+// expect contains: 0002     | OpRet

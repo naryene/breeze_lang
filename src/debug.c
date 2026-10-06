@@ -68,16 +68,6 @@ static uint32_t special_inst(const char *name, const Chunk *chunk,
   return offset;
 }
 
-// Locals and upvalues are addressed by stack slot / upvalue index, not by
-// constant-table index, so print the number only.
-static uint32_t slot_inst(const char *name, const Chunk *chunk,
-                          uint32_t offset) {
-  uint32_t slot = 0;
-  offset = read_idx(chunk, offset + 1, &slot);
-  printf("%-16s %4d\n", name, slot);
-  return offset;
-}
-
 static uint32_t jmp_inst(const char *name, const Chunk *chunk,
                          uint32_t offset) {
   uint16_t jmp = (uint16_t)chunk->code[offset + 1];
@@ -111,9 +101,10 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
     ObjFunction *function = AS_FUNCTION(chunk->constants.values[constant_idx]);
     for (uint32_t i = 0; i < function->upvalues_len; i += 1) {
       bool is_local = chunk->code[offset];
-      offset = read_idx(chunk, offset + 1, &constant_idx);
-      printf("%04d    |             %s %d\n", offset - 2,
-             is_local ? "local" : "upvalue", constant_idx);
+      uint8_t index = chunk->code[offset + 1];
+      printf("%04d    |             %s %d\n", offset,
+             is_local ? "local" : "upvalue", index);
+      offset += 2;
     }
     return offset;
   }
@@ -146,13 +137,13 @@ uint32_t disassemble_inst(const Chunk *chunk, uint32_t offset) {
   case OpSetGlobal:
     return special_inst("OpSetGlobal", chunk, offset, NULL);
   case OpGetUpvalue:
-    return slot_inst("OpGetUpvalue", chunk, offset);
+    return byte_inst("OpGetUpvalue", chunk, offset);
   case OpSetUpvalue:
-    return slot_inst("OpSetUpvalue", chunk, offset);
+    return byte_inst("OpSetUpvalue", chunk, offset);
   case OpGetLocal:
-    return slot_inst("OpGetLocal", chunk, offset);
+    return byte_inst("OpGetLocal", chunk, offset);
   case OpSetLocal:
-    return slot_inst("OpSetLocal", chunk, offset);
+    return byte_inst("OpSetLocal", chunk, offset);
   case OpDefineProperty:
     return special_inst("OpDefineProperty", chunk, offset, NULL);
   case OpGetProperty:

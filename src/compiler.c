@@ -333,6 +333,7 @@ static int32_t resolve_upvalue(Compiler *compiler, const Token *name) {
 
 static void emit_variable_operation(const Token *name, bool can_assign) {
   uint8_t get_op, set_op;
+  bool is_global = false;
   int32_t arg = resolve_local(current_compiler, name);
   if (arg != -1) {
     get_op = OpGetLocal;
@@ -344,6 +345,7 @@ static void emit_variable_operation(const Token *name, bool can_assign) {
     arg = emit_name(name);
     get_op = OpGetGlobal;
     set_op = OpSetGlobal;
+    is_global = true;
   }
 
   if (can_assign && match_token(TokenEqual)) {
@@ -352,7 +354,15 @@ static void emit_variable_operation(const Token *name, bool can_assign) {
   } else {
     emit_byte(get_op);
   }
-  emit_idx(arg);
+
+  if (is_global) {
+    // Globals index the constant table, which can exceed 255 entries.
+    emit_idx(arg);
+  } else {
+    // Local slots and upvalue indices are capped at UINT8_COUNT, so a raw
+    // byte always fits and saves the width prefix and its branch.
+    emit_byte((uint8_t)arg);
+  }
 }
 
 static void add_local(const Token *name) {
@@ -534,7 +544,7 @@ static void function(const FunctionType function_type) {
 
   for (uint32_t i = 0; i < func->upvalues_len; i += 1) {
     emit_byte(compiler.upvalues[i].is_local ? 1 : 0);
-    emit_idx(compiler.upvalues[i].index);
+    emit_byte((uint8_t)compiler.upvalues[i].index);
   }
 }
 

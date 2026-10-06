@@ -353,23 +353,23 @@ static InterpretResult run() {
       break;
     }
     case OpSetLocal: {
-      uint32_t local_stack_idx = READ_IDX(READ_BYTE());
-      frame->frame_ptr[local_stack_idx] = peek_stack(0);
+      uint8_t slot = READ_BYTE();
+      frame->frame_ptr[slot] = peek_stack(0);
       break;
     }
     case OpGetLocal: {
-      uint32_t local_stack_idx = READ_IDX(READ_BYTE());
-      push_stack(frame->frame_ptr[local_stack_idx]);
+      uint8_t slot = READ_BYTE();
+      push_stack(frame->frame_ptr[slot]);
       break;
     }
     case OpSetUpvalue: {
-      uint32_t upvalue_idx = READ_IDX(READ_BYTE());
-      *frame->closure->upvalues[upvalue_idx]->location = peek_stack(0);
+      uint8_t slot = READ_BYTE();
+      *frame->closure->upvalues[slot]->location = peek_stack(0);
       break;
     }
     case OpGetUpvalue: {
-      uint32_t upvalue_idx = READ_IDX(READ_BYTE());
-      push_stack(*frame->closure->upvalues[upvalue_idx]->location);
+      uint8_t slot = READ_BYTE();
+      push_stack(*frame->closure->upvalues[slot]->location);
       break;
     }
     case OpDefineProperty: {
@@ -522,7 +522,7 @@ static InterpretResult run() {
       push_stack(OBJ_VAL(closure));
       for (uint32_t i = 0; i < closure->upvalues_len; i += 1) {
         uint8_t is_local = READ_BYTE();
-        uint32_t index = READ_IDX(READ_BYTE());
+        uint8_t index = READ_BYTE();
         if (is_local) {
           closure->upvalues[i] = capture_upvalue(frame->frame_ptr + index);
         } else {

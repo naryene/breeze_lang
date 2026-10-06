@@ -25,7 +25,7 @@ bash debug.sh                # gdb --args build/breeze test.txt
 
 - `python3 bench/run.py` times `bench/<name>.{bz,ts,lua,py,rs}` on every installed runtime (Breeze -O2, Lua, LuaJIT, Python, Node/Bun/Deno running TypeScript, Rust -O3), checks each program's output, and prints medians.
 - `--langs breeze --save build/bench/x.json` records a run, and `--compare build/bench/x.json` prints per-benchmark speedups plus the geometric mean. Use these around every performance change.
-- `bench/ab.py <rev-a> [<rev-b>]` builds two revisions (default B: the working tree) and alternates their runs, so both see the same machine state; use it to gate performance changes. Both tools link `virtual_machine.c` first, because code-layout shifts alone move timings by ~10%.
+- `bench/ab.py <rev-a> [<rev-b>]` builds two revisions (default B: the working tree) and alternates their runs, so both see the same machine state; use it to gate performance changes. Both tools link `virtual_machine.c` first and build with `-falign-jumps=32 -falign-labels=32 -falign-loops=32`, because code-layout shifts alone move timings by ~10%; with both, A/A runs agree within ±0.2%. `--cflags` adds flags to both sides.
 - Benchmark programs may only use features Breeze has: no arrays, no `%`, no number→string conversion.
 - Performance roadmap: `docs/superpowers/specs/2026-10-06-breeze-performance-roadmap.md`.
 
@@ -37,7 +37,7 @@ There is no AST: the Pratt parser (`rules[]` table in compiler.c) emits bytecode
 
 ## Bytecode encoding (non-obvious)
 
-- **Variable-width operands reuse `OpConst`/`OpConstLong` as a width prefix.** Any operand that is an index (constant, global name, local slot, upvalue slot, property name, class/method name, closure upvalue index) is written via `emit_idx` → `write_constant_chunk`, producing either `OpConst <u8>` or `OpConstLong <u24 little-endian>`. So `OpGetLocal 3` is actually encoded as `OpGetLocal OpConst 3`. The VM decodes with `READ_IDX(READ_BYTE())` / `READ_STRING()`; the disassembler uses `special_inst` / `read_idx`. Any new opcode with an index operand must follow this convention in all three places (compiler, VM, debug.c).
+- **Index operands use `OpConst`/`OpConstLong` as a width prefix, except locals and upvalues.** Constant, global-name, property, class/method-name and closure-function operands are written via `emit_idx` → `write_constant_chunk` as `OpConst <u8>` or `OpConstLong <u24 little-endian>`, and the VM decodes them with `READ_IDX(READ_BYTE())` / `READ_STRING()`. Local slots and upvalue indices (≤ 255) are a single raw byte: `OpGetLocal <u8>`, and `OpClosure`'s upvalue pairs are `<u8 is_local> <u8 index>`. Any new opcode must use the same operand form in all three places: compiler, VM and `debug.c`.
 - **Jumps are absolute** 16-bit little-endian targets into the chunk (`READ_WORD`), not relative offsets. `patch_jmp` writes the current chunk length; `emit_loop` writes `loop_start`.
 - Line info is a run-length `LineVec` of `{line, last_offset}` pairs, queried by binary search in `get_line`.
 
