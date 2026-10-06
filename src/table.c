@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -21,7 +22,10 @@ void free_table(Table *table) {
 
 static TableEntry *find_table_entry(TableEntry *entries, uint32_t capacity,
                                     const ObjString *key) {
-  uint32_t idx = key->hash % capacity;
+  // Capacities are powers of two, so masking equals `% capacity` without a
+  // hardware divide.
+  uint32_t mask = capacity - 1;
+  uint32_t idx = key->hash & mask;
   TableEntry *tombstone = NULL;
   while (true) {
     TableEntry *entry = &entries[idx];
@@ -37,7 +41,7 @@ static TableEntry *find_table_entry(TableEntry *entries, uint32_t capacity,
       return entry;
     }
 
-    idx = (idx + 1) % capacity;
+    idx = (idx + 1) & mask;
   }
 }
 
@@ -66,6 +70,7 @@ bool table_get(const Table *table, const ObjString *key, Value *value) {
 }
 
 static void adjust_table_capacity(Table *table, uint32_t capacity) {
+  assert((capacity & (capacity - 1)) == 0 && "capacity must be a power of two");
   TableEntry *entries = ALLOCATE(TableEntry, capacity);
   for (uint32_t i = 0; i < capacity; i += 1) {
     entries[i].key = NULL;
@@ -138,7 +143,8 @@ ObjString *table_find_string(const Table *table, const char *chars,
     return NULL;
   }
 
-  uint32_t idx = hash % table->capacity;
+  uint32_t mask = table->capacity - 1;
+  uint32_t idx = hash & mask;
   while (true) {
     TableEntry *entry = &table->entries[idx];
     if (entry->key == NULL) {
@@ -150,7 +156,7 @@ ObjString *table_find_string(const Table *table, const char *chars,
       return entry->key;
     }
 
-    idx = (idx + 1) % table->capacity;
+    idx = (idx + 1) & mask;
   }
 }
 
@@ -185,7 +191,10 @@ void free_set(Set *set) {
 
 static SetEntry *find_set_entry(SetEntry *entries, uint32_t capacity,
                                 const ObjString *key) {
-  uint32_t idx = key->hash % capacity;
+  // Capacities are powers of two, so masking equals `% capacity` without a
+  // hardware divide.
+  uint32_t mask = capacity - 1;
+  uint32_t idx = key->hash & mask;
   SetEntry *tombstone = NULL;
 
   while (true) {
@@ -200,7 +209,7 @@ static SetEntry *find_set_entry(SetEntry *entries, uint32_t capacity,
       return entry;
     }
 
-    idx = (idx + 1) % capacity;
+    idx = (idx + 1) & mask;
   }
 }
 
@@ -213,6 +222,7 @@ bool set_contains(const Set *set, const ObjString *key) {
 }
 
 static void adjust_set_capacity(Set *set, uint32_t capacity) {
+  assert((capacity & (capacity - 1)) == 0 && "capacity must be a power of two");
   SetEntry *entries = ALLOCATE(SetEntry, capacity);
   for (uint32_t i = 0; i < capacity; i += 1) {
     entries[i].key = NULL;
